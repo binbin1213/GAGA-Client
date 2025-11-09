@@ -1,7 +1,6 @@
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use sysinfo::{System, SystemExt, DiskExt, CpuExt};
 use sha2::{Sha256, Digest};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -272,30 +271,17 @@ async fn check_tool_available(tool_name: String) -> Result<bool, String> {
 /// 获取系统信息用于生成设备ID
 #[tauri::command]
 async fn get_system_info() -> Result<serde_json::Value, String> {
-  let mut sys = System::new_all();
-  sys.refresh_all();
-
-  // 获取主机名
-  let hostname = sys.host_name().unwrap_or_default();
-
-  // 获取CPU信息
-  let cpu_id = if let Some(cpu) = sys.cpus().first() {
-    format!("{}{}{}", cpu.vendor_id(), cpu.brand(), cpu.frequency())
-  } else {
-    String::new()
-  };
-
-  // 获取主板序列号（简化版本，实际可能需要管理员权限）
-  let board_serial = get_board_serial().unwrap_or_default();
-
-  // 获取第一个磁盘的序列号
-  let disk_serial = sys.disks().first()
-    .and_then(|disk| disk.serial_number())
-    .unwrap_or_default()
-    .to_string();
-
-  // 获取MAC地址
-  let mac_address = get_mac_address().unwrap_or_default();
+  // 简化版本，只获取基本信息
+  let hostname = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown".to_string());
+  
+  // 获取当前用户名
+  let username = std::env::var("USERNAME").unwrap_or_else(|_| "user".to_string());
+  
+  // 使用简单的硬件标识
+  let cpu_id = format!("{}_{}", hostname, username);
+  let board_serial = cpu_id.clone();
+  let disk_serial = cpu_id.clone();
+  let mac_address = "00:00:00:00:00:00".to_string();
 
   let info = serde_json::json!({
     "hostname": hostname,
