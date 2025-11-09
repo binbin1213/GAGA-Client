@@ -47,7 +47,7 @@ export async function downloadAndDecrypt(options: DownloadOptions): Promise<stri
   try {
     // 使用 Tauri Command API 执行命令
     // 注意：需要先在 Rust 后端创建对应的命令处理器
-    const result = await invoke<string>('exec_download_command', {
+    await invoke<string>('exec_download_command', {
       command: cmd.join(' '),
       args: cmd.slice(1),
     });
