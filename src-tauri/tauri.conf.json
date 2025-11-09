@@ -1,5 +1,5 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "GAGA Client",
   "version": "0.1.0",
   "identifier": "com.gaga.client",
@@ -14,28 +14,27 @@
       {
         "title": "GAGA Client",
         "label": "main",
-        "width": 900,
+        "width": 600,
         "height": 700,
-        "minWidth": 800,
+        "minWidth": 500,
         "minHeight": 600,
+        "maxWidth": 1920,
+        "maxHeight": 1080,
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "decorations": true,
+        "decorations": false,
         "alwaysOnTop": false,
         "skipTaskbar": false,
-        "theme": "system",
-        "titleBarStyle": "visible"
+        "maximizable": true,
+        "minimizable": true,
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
       "csp": null
     },
-    "systemTray": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false
-    }
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,

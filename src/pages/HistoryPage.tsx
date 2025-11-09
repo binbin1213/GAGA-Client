@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { readHistory, deleteDownloadRecord, clearHistory } from '../utils/history';
 import type { DownloadRecord } from '../types/history';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 interface Props {
   onBack: () => void;
@@ -71,23 +72,39 @@ export default function HistoryPage({ onBack }: Props) {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 800, margin: '40px auto', padding: 24, textAlign: 'center' }}>
-        <div>加载中...</div>
+      <div style={{ width: '100vw', height: '100vh', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: '#606060', fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '14px' }}>加载中...</div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '40px auto', padding: 24, background: '#fff', borderRadius: 8, boxShadow: '0 0 18px #eee' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2>下载历史</h2>
-        <div>
-          <button onClick={onBack} style={{ marginRight: 8 }}>返回</button>
+    <div style={{ width: '100vw', height: '100vh', background: '#f5f5f5', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 顶部窗口控制栏 */}
+      <div 
+        data-tauri-drag-region
+        style={{ padding: '0', height: '36px', background: '#ffffff', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '1px' }}>
+          <button onClick={() => getCurrentWindow().minimize()} style={{ width: '36px', height: '36px', background: 'transparent', color: '#606060', border: 'none', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>−</button>
+          <button onClick={async () => { const window = getCurrentWindow(); if (await window.isMaximized()) { await window.unmaximize(); } else { await window.maximize(); } }} style={{ width: '36px', height: '36px', background: 'transparent', color: '#606060', border: 'none', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>□</button>
+          <button onClick={() => getCurrentWindow().hide()} style={{ width: '36px', height: '36px', background: 'transparent', color: '#606060', border: 'none', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>×</button>
+        </div>
+      </div>
+
+      {/* 标题和按钮 */}
+      <div style={{ background: 'transparent', padding: '24px 24px 16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#1a1a1a', fontFamily: 'system-ui, -apple-system, sans-serif' }}>下载历史</h2>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={onBack} style={{ padding: '8px 16px', background: '#ffffff', color: '#333333', border: '1px solid #d0d0d0', fontSize: '13px', fontFamily: 'system-ui, -apple-system, sans-serif', cursor: 'pointer' }}>返回</button>
           {records.length > 0 && (
-            <button onClick={handleClearAll} style={{ color: 'red' }}>清空全部</button>
+            <button onClick={handleClearAll} style={{ padding: '8px 16px', background: '#ffffff', color: '#dc2626', border: '1px solid #fecaca', fontSize: '13px', fontFamily: 'system-ui, -apple-system, sans-serif', cursor: 'pointer' }}>清空全部</button>
           )}
         </div>
       </div>
+
+      {/* 内容区域 */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 24px 24px' }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
 
       {records.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>
@@ -149,6 +166,8 @@ export default function HistoryPage({ onBack }: Props) {
           ))}
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

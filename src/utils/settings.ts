@@ -2,8 +2,7 @@
  * 应用配置管理工具
  */
 
-import { readFile, writeFile } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import type { AppSettings } from '../types/config';
 
 const SETTINGS_FILE = 'app_settings.json';
@@ -24,27 +23,18 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 /**
- * 获取配置文件路径
- */
-async function getSettingsFilePath(): Promise<string> {
-  const appDir = await appDataDir();
-  return await join(appDir, SETTINGS_FILE);
-}
-
-/**
  * 读取应用配置
  */
 export async function readSettings(): Promise<AppSettings> {
   try {
-    const filePath = await getSettingsFilePath();
-    const content = await readFile(filePath);
-    const text = new TextDecoder().decode(content);
+    const text = await readTextFile(SETTINGS_FILE, { baseDir: BaseDirectory.AppData });
     const settings = JSON.parse(text);
     
     // 合并默认配置，确保所有字段都存在
     return { ...DEFAULT_SETTINGS, ...settings };
   } catch (error) {
     // 文件不存在或读取失败，返回默认配置
+    console.log('配置文件不存在，使用默认配置');
     return DEFAULT_SETTINGS;
   }
 }
@@ -54,9 +44,9 @@ export async function readSettings(): Promise<AppSettings> {
  */
 export async function writeSettings(settings: AppSettings): Promise<void> {
   try {
-    const filePath = await getSettingsFilePath();
-    const content = new TextEncoder().encode(JSON.stringify(settings, null, 2));
-    await writeFile(filePath, content);
+    const content = JSON.stringify(settings, null, 2);
+    await writeTextFile(SETTINGS_FILE, content, { baseDir: BaseDirectory.AppData });
+    console.log('配置已保存');
   } catch (error) {
     console.error('保存配置失败:', error);
     throw error;

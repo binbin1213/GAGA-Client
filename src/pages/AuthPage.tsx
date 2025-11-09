@@ -3,13 +3,15 @@ import { auth } from '../api';
 import type { AuthRequest, AuthResponse } from '../types/api';
 import { saveAuthState } from '../utils/auth';
 import { getDeviceId } from '../utils/deviceId';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 interface Props {
   onAuthed?: (deviceId: string, license: string) => void;
   deviceId?: string;
+  onBack?: () => void;
 }
 
-export default function AuthPage({ onAuthed, deviceId: initialDeviceId }: Props) {
+export default function AuthPage({ onAuthed, deviceId: initialDeviceId, onBack }: Props) {
   const [deviceId, setDeviceId] = useState('正在获取设备码...');
   const [licenseCode, setLicenseCode] = useState('');
   const [status, setStatus] = useState<string | null>(null);
@@ -83,162 +85,240 @@ export default function AuthPage({ onAuthed, deviceId: initialDeviceId }: Props)
 
   return (
     <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%)',
+      width: '100vw',
+      height: '100vh',
+      background: '#f5f5f5',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px'
+      flexDirection: 'column',
+      margin: 0,
+      padding: 0,
+      overflow: 'hidden',
+      boxSizing: 'border-box'
     }}>
+      {/* 顶部窗口控制栏 */}
+      <div 
+        data-tauri-drag-region
+        style={{
+          background: '#ffffff',
+          padding: '0',
+          height: '36px',
+          borderBottom: '1px solid #e0e0e0',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center'
+        }}>
+        <div style={{ display: 'flex', gap: '1px' }}>
+          <button
+            onClick={() => getCurrentWindow().minimize()}
+            style={{
+              width: '36px',
+              height: '36px',
+              background: 'transparent',
+              color: '#606060',
+              border: 'none',
+              fontSize: '14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0
+            }}
+          >
+            −
+          </button>
+          <button
+            onClick={async () => {
+              const window = getCurrentWindow();
+              if (await window.isMaximized()) {
+                await window.unmaximize();
+              } else {
+                await window.maximize();
+              }
+            }}
+            style={{
+              width: '36px',
+              height: '36px',
+              background: 'transparent',
+              color: '#606060',
+              border: 'none',
+              fontSize: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0
+            }}
+          >
+            □
+          </button>
+          <button
+            onClick={() => getCurrentWindow().hide()}
+            style={{
+              width: '36px',
+              height: '36px',
+              background: 'transparent',
+              color: '#606060',
+              border: 'none',
+              fontSize: '16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0
+            }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      {/* 授权表单区域 */}
       <div style={{
-        width: '100%',
-        maxWidth: '480px',
-        background: '#ffffff',
-        borderRadius: '16px',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        padding: '40px',
-        boxSizing: 'border-box'
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px'
       }}>
-        {/* 标题区域 */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <div style={{
+        width: '480px',
+        maxWidth: '100%',
+        background: '#ffffff',
+        padding: '40px',
+        border: '1px solid #e0e0e0',
+        boxSizing: 'border-box',
+        position: 'relative'
+      }}>
+        {/* 返回按钮 */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              padding: '8px 16px',
+              background: '#ffffff',
+              color: '#333333',
+              border: '1px solid #d0d0d0',
+              fontSize: '13px',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              cursor: 'pointer'
+            }}
+          >
+            ← 返回
+          </button>
+        )}
+
+        <div style={{ marginBottom: '32px', textAlign: 'center' }}>
           <h1 style={{
-            margin: '0 0 8px 0',
-            fontSize: '28px',
+            fontSize: '20px',
             fontWeight: '600',
-            color: '#1f2937',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            color: '#1a1a1a',
+            margin: '0 0 8px 0',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            letterSpacing: '-0.5px'
           }}>
             设备授权
           </h1>
           <p style={{
+            fontSize: '13px',
+            color: '#666666',
             margin: 0,
-            fontSize: '14px',
-            color: '#6b7280',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            fontFamily: 'system-ui, -apple-system, sans-serif'
           }}>
-            请输入您的设备码和授权码以激活应用
+            请输入授权码以激活应用
           </p>
         </div>
 
-        {/* 设备码区域 */}
         <div style={{ marginBottom: '24px' }}>
           <label style={{
             display: 'block',
-            fontSize: '14px',
+            fontSize: '13px',
             fontWeight: '500',
-            color: '#374151',
-            marginBottom: '8px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            color: '#333333',
+            marginBottom: '10px',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
           }}>
             设备码
           </label>
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            padding: '14px 16px',
+            border: '1px solid #e0e0e0',
+            backgroundColor: '#f9f9f9',
+            fontSize: '13px',
+            fontFamily: 'Consolas, Monaco, monospace',
+            wordBreak: 'break-all',
+            color: '#333333',
+            lineHeight: '1.6',
+            marginBottom: '12px'
           }}>
-            <div style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px',
-              backgroundColor: '#f9fafb',
-              fontSize: '14px',
-              fontFamily: 'monospace',
-              wordBreak: 'break-all',
-              color: '#4b5563',
-              minHeight: '44px',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              {deviceId}
-            </div>
-            <button
-              onClick={handleCopy}
-              style={{
-                padding: '12px 16px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                minWidth: '80px'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = '#2563eb';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = '#3b82f6';
-              }}
-            >
-              复制
-            </button>
+            {deviceId}
           </div>
+          <button
+            onClick={handleCopy}
+            style={{
+              width: '100%',
+              padding: '11px',
+              backgroundColor: '#f5f5f5',
+              color: '#333333',
+              border: '1px solid #d0d0d0',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}
+          >
+            复制设备码
+          </button>
         </div>
 
-        {/* 授权码区域 */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '24px' }}>
           <label style={{
             display: 'block',
-            fontSize: '14px',
+            fontSize: '13px',
             fontWeight: '500',
-            color: '#374151',
-            marginBottom: '8px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            color: '#333333',
+            marginBottom: '10px',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
           }}>
             授权码
           </label>
           <input
-            type="text"
+            type="password"
             value={licenseCode}
             onChange={e => setLicenseCode(e.target.value)}
-            placeholder="请输入您的授权码"
+            onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
             style={{
               width: '100%',
-              padding: '12px 16px',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px',
+              padding: '14px 16px',
+              border: '1px solid #d0d0d0',
               fontSize: '14px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              outline: 'none',
-              transition: 'border-color 0.2s ease',
-              boxSizing: 'border-box'
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              backgroundColor: '#ffffff',
+              color: '#1a1a1a',
+              boxSizing: 'border-box',
+              outline: 'none'
             }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = '#3b82f6';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = '#d1d5db';
-            }}
+            onFocus={(e) => e.target.style.borderColor = '#0066ff'}
+            onBlur={(e) => e.target.style.borderColor = '#d0d0d0'}
+            placeholder="请输入授权码"
           />
         </div>
 
-        {/* 提交按钮 */}
         <button
           onClick={handleAuth}
           style={{
             width: '100%',
-            padding: '14px 24px',
-            backgroundColor: '#3b82f6',
-            color: 'white',
+            padding: '14px',
+            backgroundColor: '#0066ff',
+            color: '#ffffff',
             border: 'none',
-            borderRadius: '8px',
-            fontSize: '16px',
+            fontSize: '14px',
             fontWeight: '600',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
             marginBottom: '20px'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = '#2563eb';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = '#3b82f6';
           }}
         >
           提交授权
@@ -247,41 +327,18 @@ export default function AuthPage({ onAuthed, deviceId: initialDeviceId }: Props)
         {/* 状态消息 */}
         {msg && (
           <div style={{
-            padding: '12px 16px',
-            borderRadius: '8px',
-            fontSize: '14px',
-            textAlign: 'center',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            padding: '14px 16px',
+            fontSize: '13px',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
             backgroundColor: status === 'ok' ? '#f0fdf4' : '#fef2f2',
             color: status === 'ok' ? '#166534' : '#dc2626',
-            border: `1px solid ${status === 'ok' ? '#bbf7d0' : '#fecaca'}`
+            border: `1px solid ${status === 'ok' ? '#bbf7d0' : '#fecaca'}`,
+            textAlign: 'center'
           }}>
-            {msg}
+            {status === 'ok' ? '✓ ' : '✗ '}{msg}
           </div>
         )}
-
-        {/* 成功状态 */}
-        {status === 'ok' && (
-          <div style={{
-            marginTop: '16px',
-            padding: '12px 16px',
-            backgroundColor: '#eff6ff',
-            borderRadius: '8px',
-            border: '1px solid #bfdbfe'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#1e40af',
-              fontSize: '14px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              <span style={{ fontSize: '16px' }}>✅</span>
-              已授权，可正常使用所有功能
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

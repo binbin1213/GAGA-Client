@@ -2,57 +2,73 @@ use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use sha2::{Sha256, Digest};
+use tauri::{Manager, menu::{MenuBuilder, MenuItemBuilder}, tray::{TrayIconBuilder, TrayIconEvent}};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_log::Builder::new().build())
         .setup(|app| {
-            let tray_menu = tauri::menu::MenuBuilder::new(app)
-                .item(&tauri::menu::MenuItemBuilder::new("显示/隐藏")
-                    .id("toggle")
-                    .build(app)
-                    .unwrap())
-                .separator()
-                .item(&tauri::menu::MenuItemBuilder::new("退出")
-                    .id("quit")
-                    .build(app)
-                    .unwrap())
-                .build(app)
-                .unwrap();
-
-            let tray = tauri::tray::TrayIconBuilder::new()
-                .menu(&tray_menu)
+            let window = app.get_webview_window("main").unwrap();
+            
+            // 设置窗口图标和标题
+            window.set_title("GAGA Client").unwrap();
+            
+            // 创建托盘菜单
+            let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .items(&[&show_item, &quit_item])
+                .build()?;
+            
+            // 创建系统托盘
+            let _tray = TrayIconBuilder::new()
+                .menu(&menu)
+                .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("GAGA Client")
-                .build(app)
-                .unwrap();
+                .on_menu_event(move |app, event| {
+                    match event.id().as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+            
+            // 窗口关闭时最小化到托盘而不是退出
+            let window_clone = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window_clone.hide();
+                }
+            });
 
             #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
                 window.open_devtools();
             }
 
             Ok(())
-        })
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "toggle" => {
-                    let window = app.get_webview_window("main").unwrap();
-                    if window.is_visible().unwrap() {
-                        window.hide().unwrap();
-                    } else {
-                        window.show().unwrap();
-                        window.set_focus().unwrap();
-                    }
-                }
-                "quit" => {
-                    std::process::exit(0);
-                }
-                _ => {}
-            }
         })
         .invoke_handler(tauri::generate_handler![
             exec_download_command,

@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import AuthPage from './pages/AuthPage';
 import TaskPage from './pages/TaskPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import AuthPage from './pages/AuthPage';
 import { getDeviceId } from './utils/deviceId';
 import { validateLocalAuth, clearAuthState } from './utils/auth';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './App.css';
 
-type PageType = 'task' | 'history' | 'settings';
+type PageType = 'task' | 'history' | 'settings' | 'auth';
 
 function App() {
   const [authed, setAuthed] = useState(false);
@@ -40,16 +40,16 @@ function App() {
         setDeviceId(id);
         console.log('设备ID已初始化:', id);
 
-        // 2. 检查本地授权状态
+        // 2. 检查本地授权状态（但不强制要求授权）
         const authState = await validateLocalAuth();
         if (authState && authState.deviceId === id) {
           // 授权状态有效且设备ID匹配
           setLicense(authState.licenseCode);
           setAuthed(true);
-          console.log('本地授权状态有效，直接进入应用');
+          console.log('本地授权状态有效');
         } else {
-          console.log('需要重新授权');
-          // 确保清除任何不匹配的授权状态
+          console.log('未授权或授权已过期，可在设置中进行授权');
+          // 清除不匹配的授权状态
           if (authState) {
             await clearAuthState();
           }
@@ -62,7 +62,7 @@ function App() {
         } catch (clearError) {
           console.error('清除授权状态失败:', clearError);
         }
-        // 设置降级设备ID但不设置授权状态
+        // 设置降级设备ID
         setDeviceId(`fallback_${Date.now()}`);
       } finally {
         setLoading(false);
@@ -89,21 +89,19 @@ function App() {
     );
   }
 
-  if (!authed) {
-    return <AuthPage onAuthed={handleAuthed} deviceId={deviceId} />;
-  }
-
   const handlePageChange = (page: PageType) => {
     setCurrentPage(page);
   };
 
   switch (currentPage) {
     case 'history':
-      return <HistoryPage onBack={() => handlePageChange('task')} />;
+      return <HistoryPage key="history" onBack={() => handlePageChange('task')} />;
     case 'settings':
-      return <SettingsPage onBack={() => handlePageChange('task')} />;
+      return <SettingsPage key={`settings-${Date.now()}`} onBack={() => handlePageChange('task')} deviceId={deviceId} authed={authed} onAuthed={handleAuthed} />;
+    case 'auth':
+      return <AuthPage key="auth" deviceId={deviceId} onAuthed={(device, code) => { handleAuthed(device, code); handlePageChange('task'); }} onBack={() => handlePageChange('task')} />;
     default:
-      return <TaskPage deviceId={deviceId} licenseCode={license} onShowHistory={() => handlePageChange('history')} onShowSettings={() => handlePageChange('settings')} />;
+      return <TaskPage key="task" deviceId={deviceId} licenseCode={license} authed={authed} onShowHistory={() => handlePageChange('history')} onShowSettings={() => handlePageChange('settings')} onShowAuth={() => handlePageChange('auth')} />;
   }
 }
 
