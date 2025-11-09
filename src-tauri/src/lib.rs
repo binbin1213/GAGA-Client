@@ -280,7 +280,7 @@ async fn get_system_info() -> Result<serde_json::Value, String> {
 
   // 获取CPU信息
   let cpu_id = if let Some(cpu) = sys.cpus().first() {
-    format!("{}{}{}", cpu.vendor_id(), cpu.brand_id(), cpu.frequency())
+    format!("{}{}{}", cpu.vendor_id(), cpu.brand(), cpu.frequency())
   } else {
     String::new()
   };
