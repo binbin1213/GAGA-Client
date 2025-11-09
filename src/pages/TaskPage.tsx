@@ -14,8 +14,6 @@ interface TaskPageProps {
 }
 
 const TaskPage: React.FC<TaskPageProps> = ({ 
-  deviceId,
-  licenseCode,
   authed,
   onShowHistory, 
   onShowSettings,
