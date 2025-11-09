@@ -5,17 +5,21 @@ import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { mkdir, readDir, remove, readFile, writeFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
+import { addDownloadRecord, updateDownloadRecord } from '../utils/history';
 
 interface Props {
   deviceId: string;
   licenseCode: string;
+  onShowHistory?: () => void;
+  onShowSettings?: () => void;
 }
 
-export default function TaskPage({ deviceId, licenseCode }: Props) {
+export default function TaskPage({ deviceId, licenseCode, onShowHistory, onShowSettings }: Props) {
   const [jsonInput, setJsonInput] = useState('');
   const [status, setStatus] = useState('');
   const [progress, setProgress] = useState(0);
   const [msg, setMsg] = useState('');
+  const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
 
   // 解析 JSON 输入（从油猴脚本复制的数据）- 使用 useMemo 缓存解析结果
   const parsedData = useMemo((): Partial<SubmitTaskRequest> | null => {
@@ -69,9 +73,36 @@ export default function TaskPage({ deviceId, licenseCode }: Props) {
     setProgress(0);
     setMsg('检查工具...');
 
+    // 创建下载历史记录
+    try {
+      const record = await addDownloadRecord({
+        title: parsed.title || '未知视频',
+        mpdUrl: parsed.mpd,
+        status: 'downloading',
+        progress: 0,
+      });
+      setCurrentRecordId(record.id);
+    } catch (error) {
+      console.error('创建历史记录失败:', error);
+    }
+
     // 检查工具
     if (!(await checkTools())) {
       setStatus('failed');
+      
+      // 更新历史记录为失败状态
+      if (currentRecordId) {
+        try {
+          await updateDownloadRecord(currentRecordId, {
+            status: 'failed',
+            progress: 0,
+            errorMessage: '工具检查失败',
+          });
+        } catch (error) {
+          console.error('更新历史记录失败:', error);
+        }
+      }
+      
       return;
     }
 
@@ -321,6 +352,20 @@ export default function TaskPage({ deviceId, licenseCode }: Props) {
       setStatus('completed');
       setMsg('下载完成！文件已保存');
 
+      // 更新历史记录为完成状态
+      if (currentRecordId) {
+        try {
+          await updateDownloadRecord(currentRecordId, {
+            status: 'completed',
+            progress: 100,
+            completedAt: new Date().toISOString(),
+            files: [filePath],
+          });
+        } catch (error) {
+          console.error('更新历史记录失败:', error);
+        }
+      }
+
     } catch (e: any) {
       console.error('处理失败:', e);
       const errorMsg = e?.message || e?.toString() || '未知错误';
@@ -332,12 +377,39 @@ export default function TaskPage({ deviceId, licenseCode }: Props) {
       });
       setMsg('处理失败: ' + errorMsg);
       setStatus('failed');
+
+      // 更新历史记录为失败状态
+      if (currentRecordId) {
+        try {
+          await updateDownloadRecord(currentRecordId, {
+            status: 'failed',
+            progress: 0,
+            errorMessage: errorMsg,
+          });
+        } catch (error) {
+          console.error('更新历史记录失败:', error);
+        }
+      }
     }
   }, [parsedData, deviceId, licenseCode, checkTools]);
 
   return (
     <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, background: '#fff', borderRadius: 8, boxShadow: '0 0 18px #eee' }}>
-      <h2 style={{ textAlign: 'center' }}>下载视频</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>下载视频</h2>
+        <div>
+          {onShowHistory && (
+            <button onClick={onShowHistory} style={{ marginRight: 8, padding: '6px 12px' }}>
+              下载历史
+            </button>
+          )}
+          {onShowSettings && (
+            <button onClick={onShowSettings} style={{ padding: '6px 12px' }}>
+              设置
+            </button>
+          )}
+        </div>
+      </div>
       <div style={{ marginBottom: 16 }}>
         <div style={{ marginBottom: 8, fontSize: 14, color: '#666' }}>
           从油猴脚本复制的 JSON 数据：

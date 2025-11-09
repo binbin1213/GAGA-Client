@@ -10,7 +10,7 @@ const api = axios.create({
 
 // 设备授权接口
 export async function auth(data: AuthRequest): Promise<AuthResponse> {
-  const res = await api.post<AuthResponse>('/api/auth', data);
+  const res = await api.post<AuthResponse>('/api/auth/login', data);
   return res.data;
 }
 

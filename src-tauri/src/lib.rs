@@ -1,6 +1,8 @@
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use sysinfo::{System, SystemExt, DiskExt, CpuExt};
+use sha2::{Sha256, Digest};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -11,7 +13,9 @@ pub fn run() {
       exec_download_command,
       exec_merge_command,
       check_tool_available,
-      get_tool_path
+      get_tool_path,
+      get_system_info,
+      hash_string
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -263,4 +267,126 @@ async fn check_tool_available(tool_name: String) -> Result<bool, String> {
     .map_err(|e| format!("检查工具失败: {}", e))?;
 
   Ok(output.status.success())
+}
+
+/// 获取系统信息用于生成设备ID
+#[tauri::command]
+async fn get_system_info() -> Result<serde_json::Value, String> {
+  let mut sys = System::new_all();
+  sys.refresh_all();
+
+  // 获取主机名
+  let hostname = sys.host_name().unwrap_or_default();
+
+  // 获取CPU信息
+  let cpu_id = if let Some(cpu) = sys.cpus().first() {
+    format!("{}{}{}", cpu.vendor_id(), cpu.brand_id(), cpu.frequency())
+  } else {
+    String::new()
+  };
+
+  // 获取主板序列号（简化版本，实际可能需要管理员权限）
+  let board_serial = get_board_serial().unwrap_or_default();
+
+  // 获取第一个磁盘的序列号
+  let disk_serial = sys.disks().first()
+    .and_then(|disk| disk.serial_number())
+    .unwrap_or_default()
+    .to_string();
+
+  // 获取MAC地址
+  let mac_address = get_mac_address().unwrap_or_default();
+
+  let info = serde_json::json!({
+    "hostname": hostname,
+    "cpu_id": cpu_id,
+    "board_serial": board_serial,
+    "disk_serial": disk_serial,
+    "mac_address": mac_address
+  });
+
+  Ok(info)
+}
+
+/// 获取主板序列号
+fn get_board_serial() -> Option<String> {
+  #[cfg(windows)]
+  {
+    use std::process::Command;
+    let output = Command::new("wmic")
+      .args(&["baseboard", "get", "serialnumber"])
+      .output()
+      .ok()?;
+    
+    if output.status.success() {
+      let result = String::from_utf8_lossy(&output.stdout);
+      for line in result.lines() {
+        let line = line.trim();
+        if !line.is_empty() && !line.starts_with("SerialNumber") {
+          return Some(line.to_string());
+        }
+      }
+    }
+  }
+
+  #[cfg(unix)]
+  {
+    use std::fs;
+    if let Ok(content) = fs::read_to_string("/sys/class/dmi/id/board_serial") {
+      let serial = content.trim();
+      if !serial.is_empty() {
+        return Some(serial.to_string());
+      }
+    }
+  }
+
+  None
+}
+
+/// 获取MAC地址
+fn get_mac_address() -> Option<String> {
+  #[cfg(windows)]
+  {
+    use std::process::Command;
+    let output = Command::new("getmac")
+      .args(&["/format", "list"])
+      .output()
+      .ok()?;
+    
+    if output.status.success() {
+      let result = String::from_utf8_lossy(&output.stdout);
+      for line in result.lines() {
+        if line.contains("Physical Address") {
+          if let Some(mac_part) = line.split(':').nth(1) {
+            let mac = mac_part.trim().to_string();
+            if !mac.is_empty() {
+              return Some(mac);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  #[cfg(unix)]
+  {
+    use std::fs;
+    if let Ok(content) = fs::read_to_string("/sys/class/net/eth0/address") {
+      let mac = content.trim().to_string();
+      if !mac.is_empty() {
+        return Some(mac);
+      }
+    }
+  }
+
+  None
+}
+
+/// 字符串哈希函数
+#[tauri::command]
+async fn hash_string(input: String) -> Result<String, String> {
+  let mut hasher = Sha256::new();
+  hasher.update(input.as_bytes());
+  let result = hasher.finalize();
+  Ok(format!("{:x}", result))
 }

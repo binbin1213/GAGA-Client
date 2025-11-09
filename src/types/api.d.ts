@@ -8,6 +8,7 @@ export interface AuthRequest {
 export interface AuthResponse {
   status: string; // ok | failed
   message?: string;
+  expires_at?: string; // 授权过期时间（ISO 8601 格式）
 }
 
 export interface SubmitTaskRequest {
