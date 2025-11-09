@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AuthPage from './pages/AuthPage';
 import TaskPage from './pages/TaskPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import { getDeviceId } from './utils/deviceId';
 import { validateLocalAuth, clearAuthState } from './utils/auth';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import './App.css';
 
 type PageType = 'task' | 'history' | 'settings';
@@ -16,8 +17,20 @@ function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('task');
   const [loading, setLoading] = useState(true); // 统一加载状态
 
-  // 初始化时获取设备ID并检查授权状态
   useEffect(() => {
+    // 设置窗口最小化到托盘的行为
+    const setupWindow = async () => {
+      const window = getCurrentWindow();
+      
+      // 监听窗口关闭事件，改为隐藏到托盘
+      const unlisten = window.onCloseRequested(async (event) => {
+        event.preventDefault();
+        await window.hide();
+      });
+
+      return unlisten;
+    };
+
     const initializeApp = async () => {
       try {
         console.log('正在初始化应用...');
@@ -56,6 +69,7 @@ function App() {
       }
     };
 
+    setupWindow();
     initializeApp();
   }, []);
 

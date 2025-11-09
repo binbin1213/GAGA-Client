@@ -13,14 +13,28 @@
     "windows": [
       {
         "title": "GAGA Client",
-        "width": 800,
-        "height": 600,
+        "label": "main",
+        "width": 900,
+        "height": 700,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "theme": "system",
+        "titleBarStyle": "visible"
       }
     ],
     "security": {
       "csp": null
+    },
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
     }
   },
   "bundle": {
