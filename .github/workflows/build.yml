@@ -15,6 +15,7 @@ jobs:
         platform: [windows-latest]
         
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 30  # 防止构建卡住太久
     
     steps:
     - name: 检出代码仓库
@@ -33,6 +34,8 @@ jobs:
       uses: swatinem/rust-cache@v2
       with:
         workspaces: './src-tauri -> target'
+        cache-targets: true
+        cache-all-crates: true
         
     - name: 配置 Node.js 环境和缓存
       uses: actions/setup-node@v4
