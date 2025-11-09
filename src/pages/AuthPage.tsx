@@ -84,7 +84,7 @@ export default function AuthPage({ onAuthed, deviceId: initialDeviceId }: Props)
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
