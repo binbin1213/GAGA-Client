@@ -394,77 +394,270 @@ export default function TaskPage({ deviceId, licenseCode, onShowHistory, onShowS
   }, [parsedData, deviceId, licenseCode, checkTools]);
 
   return (
-    <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, background: '#fff', borderRadius: 8, boxShadow: '0 0 18px #eee' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>下载视频</h2>
-        <div>
-          {onShowHistory && (
-            <button onClick={onShowHistory} style={{ marginRight: 8, padding: '6px 12px' }}>
-              下载历史
-            </button>
-          )}
-          {onShowSettings && (
-            <button onClick={onShowSettings} style={{ padding: '6px 12px' }}>
-              设置
-            </button>
-          )}
-        </div>
-      </div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ marginBottom: 8, fontSize: 14, color: '#666' }}>
-          从油猴脚本复制的 JSON 数据：
-        </div>
-        <textarea
-          placeholder='粘贴从 GagaOOLala DRM 捕获器复制的 JSON 数据，例如：&#10;{&#10;  "Title": "视频标题",&#10;  "MPD": "https://...",&#10;  "PSSH": "AAAA...",&#10;  "LicenseURL": "https://..."&#10;}'
-          value={jsonInput}
-          onChange={e => setJsonInput(e.target.value)}
-          style={{ width: '100%', padding: 12, minHeight: 200, fontFamily: 'monospace', fontSize: 12, borderRadius: 6, border: '1px solid #ddd' }}
-        />
-      </div>
-      <button
-        onClick={handleSubmit}
-        disabled={status === 'downloading' || status === 'getting_keys' || status === 'checking'}
-        style={{
-          width: '100%',
-          padding: 10,
-          marginBottom: 24,
-          opacity: (status === 'downloading' || status === 'getting_keys' || status === 'checking') ? 0.6 : 1,
-          cursor: (status === 'downloading' || status === 'getting_keys' || status === 'checking') ? 'not-allowed' : 'pointer'
-        }}
-      >
-        {status === 'downloading' ? '下载中...' : status === 'getting_keys' ? '获取密钥...' : status === 'checking' ? '检查工具...' : '开始下载'}
-      </button>
-
-      {(status === 'downloading' || status === 'getting_keys' || status === 'checking') && (
-        <div style={{ background: '#f8f8fa', borderRadius: 6, padding: 14, marginBottom: 20 }}>
-          <div>状态: <b>{status === 'checking' ? '检查工具' : status === 'getting_keys' ? '获取密钥' : '下载中'}</b></div>
-          <div>进度: <b>{progress}%</b></div>
-          <div style={{ marginTop: 8, width: '100%', background: '#e0e0e0', borderRadius: 4, overflow: 'hidden' }}>
-            <div
-              style={{
-                height: 8,
-                background: '#4CAF50',
-                width: `${progress}%`,
-                transition: 'width 0.3s ease'
-              }}
-            />
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '20px',
+      boxSizing: 'border-box'
+    }}>
+      <div style={{
+        maxWidth: '800px',
+        margin: '0 auto',
+        background: '#ffffff',
+        borderRadius: '16px',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        padding: '40px',
+        boxSizing: 'border-box'
+      }}>
+        {/* 头部区域 */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '32px',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}>
+          <div>
+            <h1 style={{
+              margin: '0 0 4px 0',
+              fontSize: '28px',
+              fontWeight: '600',
+              color: '#1f2937',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              下载视频
+            </h1>
+            <p style={{
+              margin: 0,
+              fontSize: '14px',
+              color: '#6b7280',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              解密并下载 DRM 保护的视频内容
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onShowHistory && (
+              <button
+                onClick={onShowHistory}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                }}
+              >
+                📋 下载历史
+              </button>
+            )}
+            {onShowSettings && (
+              <button
+                onClick={onShowSettings}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                }}
+              >
+                ⚙️ 设置
+              </button>
+            )}
           </div>
         </div>
-      )}
 
-      {status === 'completed' && (
-        <div style={{ background: '#d4edda', borderRadius: 6, padding: 14, marginBottom: 20, color: '#155724' }}>
-          ✅ 下载完成！
+        {/* JSON 输入区域 */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{
+            display: 'block',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '8px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+          }}>
+            📄 从油猴脚本复制的 JSON 数据
+          </label>
+          <textarea
+            placeholder='粘贴从 GagaOOLala DRM 捕获器复制的 JSON 数据，例如：&#10;{&#10;  "Title": "视频标题",&#10;  "MPD": "https://...",&#10;  "PSSH": "AAAA...",&#10;  "LicenseURL": "https://..."&#10;}'
+            value={jsonInput}
+            onChange={e => setJsonInput(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '16px',
+              minHeight: '200px',
+              fontFamily: 'monospace',
+              fontSize: '13px',
+              borderRadius: '8px',
+              border: '1px solid #d1d5db',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              backgroundColor: '#f9fafb'
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = '#3b82f6';
+              e.currentTarget.style.backgroundColor = '#ffffff';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#d1d5db';
+              e.currentTarget.style.backgroundColor = '#f9fafb';
+            }}
+          />
         </div>
-      )}
 
-      {status === 'failed' && (
-        <div style={{ background: '#f8d7da', borderRadius: 6, padding: 14, marginBottom: 20, color: '#721c24' }}>
-          ❌ 处理失败
-        </div>
-      )}
+        {/* 数据预览 */}
+        {parsedData && (
+          <div style={{
+            marginBottom: '24px',
+            padding: '16px',
+            backgroundColor: '#f0fdf4',
+            borderRadius: '8px',
+            border: '1px solid #bbf7d0'
+          }}>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#166534',
+              marginBottom: '8px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              ✅ 数据解析成功
+            </div>
+            <div style={{ fontSize: '13px', color: '#15803d', fontFamily: 'monospace' }}>
+              标题: {parsedData.title || '未设置'}<br/>
+              MPD: {parsedData.mpd ? '已设置' : '未设置'}<br/>
+              PSSH: {parsedData.pssh ? '已设置' : '未设置'}<br/>
+              授权URL: {parsedData.license_url ? '已设置' : '未设置'}
+            </div>
+          </div>
+        )}
 
-      {msg && <div style={{ color: status === 'failed' ? 'red' : 'orange', marginTop: 12 }}>{msg}</div>}
+        {/* 开始下载按钮 */}
+        <button
+          onClick={handleSubmit}
+          disabled={status === 'downloading' || status === 'getting_keys' || status === 'checking'}
+          style={{
+            width: '100%',
+            padding: '16px 24px',
+            backgroundColor: (status === 'downloading' || status === 'getting_keys' || status === 'checking') ? '#9ca3af' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: (status === 'downloading' || status === 'getting_keys' || status === 'checking') ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s ease',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            marginBottom: '24px'
+          }}
+          onMouseOver={(e) => {
+            if (!(status === 'downloading' || status === 'getting_keys' || status === 'checking')) {
+              e.currentTarget.style.backgroundColor = '#2563eb';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (!(status === 'downloading' || status === 'getting_keys' || status === 'checking')) {
+              e.currentTarget.style.backgroundColor = '#3b82f6';
+            }
+          }}
+        >
+          {status === 'downloading' ? '⬇️ 下载中...' : status === 'getting_keys' ? '🔑 获取密钥...' : status === 'checking' ? '🔍 检查工具...' : '🚀 开始下载'}
+        </button>
+
+        {/* 进度显示区域 */}
+        {(status === 'downloading' || status === 'getting_keys' || status === 'checking') && (
+          <div style={{
+            background: '#f8fafc',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBottom: '24px',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '12px'
+            }}>
+              <span style={{
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+              }}>
+                {status === 'checking' ? '🔍 检查工具可用性' : status === 'getting_keys' ? '🔑 获取解密密钥' : '⬇️ 下载视频文件'}
+              </span>
+              <span style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#3b82f6',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+              }}>
+                {progress}%
+              </span>
+            </div>
+            <div style={{
+              width: '100%',
+              height: '8px',
+              backgroundColor: '#e2e8f0',
+              borderRadius: '4px',
+              overflow: 'hidden'
+            }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${progress}%`,
+                  background: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',
+                  transition: 'width 0.3s ease',
+                  borderRadius: '4px'
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 消息显示 */}
+        {msg && (
+          <div style={{
+            padding: '16px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            backgroundColor: msg.includes('错误') ? '#fef2f2' : '#f0fdf4',
+            color: msg.includes('错误') ? '#dc2626' : '#166534',
+            border: `1px solid ${msg.includes('错误') ? '#fecaca' : '#bbf7d0'}`
+          }}>
+            {msg}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
