@@ -12,11 +12,18 @@ permissions:
 
 jobs:
   build:
-    name: 构建 Windows 应用
+    name: 构建 ${{ matrix.platform }} 应用
     strategy:
       matrix:
-        platform: [windows-latest]
-        
+        platform: [windows-latest, macos-latest]
+        include:
+          - platform: windows-latest
+            os: windows
+            cache-key: windows
+          - platform: macos-latest
+            os: macos
+            cache-key: macos
+    
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 30  # 防止构建卡住太久
     
@@ -24,21 +31,30 @@ jobs:
     - name: 检出代码仓库
       uses: actions/checkout@v4
       
-    - name: 安装系统依赖 (仅 Ubuntu)
+    - name: 安装系统依赖 (仅 Linux)
       if: matrix.platform == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+    
+    - name: 安装系统依赖 (仅 macOS)
+      if: matrix.platform == 'macos-latest'
+      run: |
+        brew install create-dmg
         
     - name: 安装 Rust 环境
       uses: dtolnay/rust-toolchain@stable
       
     - name: 配置 Rust 缓存
-      uses: swatinem/rust-cache@v2
+      uses: actions/cache@v4
       with:
-        workspaces: './src-tauri -> target'
-        cache-targets: true
-        cache-all-crates: true
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ matrix.cache-key }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ matrix.cache-key }}-cargo-
         
     - name: 配置 Node.js 环境和缓存
       uses: actions/setup-node@v4
@@ -49,13 +65,32 @@ jobs:
     - name: 安装前端依赖
       run: npm ci
       
+    - name: 安装 Rust 目标
+      if: matrix.platform == 'macos-latest'
+      run: |
+        rustup target add x86_64-apple-darwin
+        rustup target add aarch64-apple-darwin
+        
     - name: 构建应用程序
       uses: tauri-apps/tauri-action@v0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tagName: app-v1.0.0
-        releaseName: 'GAGA 客户端应用 v1.0.0'
-        releaseBody: '查看下方资源下载并安装此版本。'
+        releaseName: 'GAGA 客户端应用 v1.0.0 (${{ matrix.os }})'
+        releaseBody: '查看下方资源下载并安装此 ${{ matrix.os }} 版本。'
         releaseDraft: true
         prerelease: false
+        include: "*${{ matrix.os }}*"
+        tauriScript: |
+          if [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            # 构建通用二进制文件
+            cargo tauri build --target universal-apple-darwin
+            # 移动构建产物到标准位置
+            mkdir -p src-tauri/target/release/bundle/macos
+            cp -r src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app src-tauri/target/release/bundle/macos/
+          else
+            cargo tauri build
+          fi
+        
+    # 上传构建产物由 tauri-action 自动处理

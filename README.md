@@ -1,172 +1,252 @@
-# GAGA 视频下载器
+# GAGA Client
 
-基于 Tauri + React 的桌面应用，用于下载和处理 DRM 保护的视频内容。
+一个基于 Tauri 的桌面视频下载客户端，支持 DRM 加密视频的下载和解密。
 
 ## 功能特性
 
-- 🎬 支持 MPD 格式视频下载
-- 🔐 自动 DRM 解密（Widevine）
-- 📝 自动烧录中文字幕
-- 🎨 现代化 UI 界面
-- 💻 跨平台支持（macOS、Windows）
+- 🔐 **设备授权管理** - 基于设备 ID 的授权验证系统
+- 🎬 **DRM 视频下载** - 支持 DASH/HLS 加密视频的下载和解密
+- 🔑 **自动密钥获取** - 自动从服务器获取解密密钥
+- 📦 **多窗口架构** - 主窗口、历史记录、设置、授权等独立窗口
+- 🎨 **Downie 风格 UI** - 玻璃态效果的现代化界面设计
+- 📝 **下载历史** - 自动记录下载历史和状态
+- 🌐 **系统托盘** - 最小化到系统托盘，后台运行
 
-## 系统要求
+## 技术栈
 
-### 必需工具
+### 前端
+- **React 18** - UI 框架
+- **TypeScript** - 类型安全
+- **Vite** - 构建工具
+- **Tauri 2.x** - 桌面应用框架
 
-应用依赖以下外部工具（已包含在 `bin` 目录中）：
-
+### 后端
+- **Rust** - Tauri 后端
 - **N_m3u8DL-RE** - 视频下载工具
-- **mp4decrypt** - 解密工具
-- **ffmpeg** - 视频处理工具（需要系统安装）
+- **FFmpeg** - 视频处理和合并
+- **mp4decrypt** - DRM 解密工具
 
-### 系统安装 ffmpeg
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Windows:**
-下载 ffmpeg 并添加到系统 PATH
-
-## 前置依赖
-
-### 后端服务
-
-本应用需要配合后端 API 服务使用：
-
-1. 克隆或下载后端项目：`GAGA-Backend`
-2. 启动后端服务（默认端口 8001）：
-   ```bash
-   cd GAGA-Backend
-   ./run.sh
-   ```
-
-### 油猴脚本
-
-需要在浏览器中安装油猴脚本来捕获 DRM 信息：
-
-1. 安装 Tampermonkey 浏览器扩展
-2. 安装 `GagaOOLala_v4_fixed.js` 脚本
-3. 访问视频网站，脚本会自动捕获 DRM 数据
-
-## 安装和运行
-
-### 开发模式
-
-```bash
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-
-# 或直接启动 Tauri 应用
-npm run tauri dev
-```
-
-### 构建应用
-
-```bash
-# 构建生产版本
-npm run build
-
-# 构建 Tauri 应用
-npm run tauri build
-```
-
-构建完成后，安装包位于 `src-tauri/target/release/bundle/` 目录。
-
-## 使用流程
-
-1. **启动后端服务**
-   ```bash
-   # 在后端项目目录
-   ./run.sh
-   ```
-
-2. **启动桌面应用**
-   ```bash
-   npm run tauri dev
-   ```
-
-3. **获取 DRM 数据**
-   - 在浏览器中打开视频网站
-   - 油猴脚本会自动捕获 DRM 信息
-   - 点击"复制数据"（选择 JSON 格式）
-
-4. **下载视频**
-   - 在桌面应用中粘贴 JSON 数据
-   - 点击"开始下载"
-   - 选择保存位置
-   - 等待下载和处理完成
-
-## 配置
-
-### 修改后端地址
-
-如果后端服务运行在其他地址，修改 `src/api/index.ts`：
-
-```typescript
-const baseURL = 'http://127.0.0.1:8001'; // 修改为你的后端地址
-```
-
-### 工具路径
-
-应用会自动查找以下位置的工具：
-1. `client/bin/` 目录（优先）
-2. 系统 PATH
+### API 服务
+- **FastAPI** - Python 后端 API
+- **SQLModel** - 数据库 ORM
+- **Widevine** - DRM 密钥获取
 
 ## 项目结构
 
 ```
-client/
-├── bin/                    # 内置工具
-│   ├── N_m3u8DL-RE        # 下载工具
-│   ├── mp4decrypt         # 解密工具
-│   └── shaka-packager     # 打包工具
-├── src/                   # 前端源代码
-│   ├── api/              # API 接口
-│   ├── pages/            # 页面组件
-│   ├── types/            # TypeScript 类型
-│   └── utils/            # 工具函数
-├── src-tauri/            # Tauri 后端
-│   └── src/
-│       └── lib.rs        # Rust 命令处理
-└── package.json
+GAGA-Client/
+├── src/                      # 前端源代码
+│   ├── api/                  # API 接口
+│   ├── components/           # React 组件
+│   ├── pages/                # 页面组件
+│   ├── styles/               # 样式文件
+│   ├── types/                # TypeScript 类型定义
+│   └── utils/                # 工具函数
+├── src-tauri/                # Tauri 后端
+│   ├── src/                  # Rust 源代码
+│   ├── capabilities/         # 权限配置
+│   └── icons/                # 应用图标
+├── bin/                      # 二进制工具
+│   ├── N_m3u8DL-RE          # 下载工具
+│   ├── ffmpeg               # 视频处理
+│   └── mp4decrypt           # 解密工具
+└── public/                   # 静态资源
 ```
 
-## 故障排除
+## 开发环境要求
 
-### 工具未找到
+- **Node.js** >= 18.0.0
+- **Rust** >= 1.70.0
+- **pnpm/npm** - 包管理器
+- **macOS/Windows/Linux** - 支持的操作系统
 
-确保 `bin` 目录中的工具有执行权限：
+## 安装和运行
+
+### 1. 克隆项目
 
 ```bash
-chmod +x bin/N_m3u8DL-RE
-chmod +x bin/mp4decrypt
+git clone <repository-url>
+cd GAGA-Client
 ```
 
-### 后端连接失败
+### 2. 安装依赖
 
-1. 确认后端服务已启动
-2. 检查端口 8001 是否被占用
-3. 查看后端日志排查问题
+```bash
+npm install
+```
 
-### 下载失败
+### 3. 配置环境变量
 
-1. 检查网络连接
-2. 确认 DRM 数据完整（MPD、PSSH、LicenseURL）
-3. 查看应用日志
+创建 `.env` 文件：
 
-## 技术栈
+```env
+VITE_API_URL=https://gaga.binbino.cn:88
+```
 
-- **前端**: React 19 + TypeScript + Vite
-- **桌面框架**: Tauri 2.x
-- **后端语言**: Rust
-- **UI**: 原生 CSS
+### 4. 开发模式运行
+
+```bash
+npm run tauri dev
+```
+
+### 5. 构建生产版本
+
+```bash
+npm run tauri build
+```
+
+构建产物位于 `src-tauri/target/release/bundle/`
+
+## 使用说明
+
+### 1. 首次启动
+
+首次启动应用时，会自动生成设备 ID 并保存到本地。
+
+### 2. 设备授权
+
+1. 点击主界面的"立即授权"按钮
+2. 复制设备 ID
+3. 输入授权码
+4. 点击"验证授权"
+
+### 3. 下载视频
+
+1. 从浏览器插件获取视频信息（JSON 格式）
+2. 粘贴到主界面的拖放区域
+3. 应用会自动：
+   - 解析视频信息
+   - 获取解密密钥
+   - 下载视频分片
+   - 解密并合并视频
+4. 下载完成后可在历史记录中查看
+
+### JSON 格式示例
+
+```json
+{
+  "Title": "视频标题",
+  "MPD": "https://example.com/video.mpd",
+  "PSSH": "AAAAQ3Bzc2g...",
+  "LicenseURL": "https://license.example.com/...",
+  "捕获时间": "2025/11/10 18:55:21"
+}
+```
+
+## 配置说明
+
+### API 配置
+
+编辑 `src/config.ts`：
+
+```typescript
+export const config = {
+  apiBaseURL: 'https://your-api-server.com',
+  timeout: 10000,
+};
+```
+
+### 下载配置
+
+在设置页面中可以配置：
+- 默认下载目录
+- 下载线程数（默认 16）
+- 其他下载选项
+
+## 开发指南
+
+### 添加新的 API 接口
+
+1. 在 `src/types/api.d.ts` 中定义类型
+2. 在 `src/api/index.ts` 中实现接口
+3. 在组件中调用
+
+### 添加新的页面
+
+1. 在 `src/pages/` 中创建页面组件
+2. 在 `src/utils/windowManager.ts` 中注册窗口
+3. 在 `src-tauri/tauri.conf.json` 中配置窗口
+
+### 添加新的 Rust 命令
+
+1. 在 `src-tauri/src/lib.rs` 中定义命令
+2. 在 `invoke_handler` 中注册
+3. 在前端使用 `invoke()` 调用
+
+## 常见问题
+
+### Q: 下载失败，提示"获取密钥失败"
+
+**A:** 检查以下几点：
+1. 确保已经授权
+2. 检查网络连接
+3. 确认 API 服务器正常运行
+4. 查看控制台日志获取详细错误信息
+
+### Q: 下载的视频无法播放
+
+**A:** 可能的原因：
+1. 解密密钥不正确
+2. 视频合并失败
+3. FFmpeg 未正确安装
+
+### Q: 应用启动后无法获取设备 ID
+
+**A:** 检查文件系统权限：
+1. 确保应用有读写权限
+2. 检查 `~/Library/Application Support/com.gaga.client/` 目录
+3. 查看日志文件获取详细信息
+
+## 依赖工具
+
+### N_m3u8DL-RE
+
+用于下载 DASH/HLS 视频流。
+
+- 版本：20251029
+- 文档：https://github.com/nilaoda/N_m3u8DL-RE
+
+### FFmpeg
+
+用于视频处理和合并。
+
+- 版本：8.0
+- 文档：https://ffmpeg.org/
+
+### mp4decrypt
+
+用于 DRM 视频解密。
+
+- 来源：Bento4 工具集
+- 文档：https://www.bento4.com/
 
 ## 许可证
 
-仅供学习和研究使用。
+本项目仅供学习和研究使用。
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。
+
+## 更新日志
+
+### v1.0.0 (2025-11-10)
+
+- ✅ 实现设备授权系统
+- ✅ 实现 DRM 视频下载
+- ✅ 实现自动密钥获取
+- ✅ 实现多窗口架构
+- ✅ 实现 Downie 风格 UI
+- ✅ 实现下载历史记录
+- ✅ 实现系统托盘功能
+
+## 联系方式
+
+如有问题或建议，请通过以下方式联系：
+
+- Issue: [GitHub Issues](https://github.com/your-repo/issues)
+- Email: your-email@example.com
+
+---
+
+**注意：** 本软件仅供学习和研究使用，请勿用于非法用途。下载受版权保护的内容前，请确保您有合法的访问权限。

@@ -72,11 +72,13 @@ async function readAuthCache(): Promise<AuthCache | null> {
  */
 async function saveAuthCache(cache: AuthCache): Promise<void> {
   try {
+    await ensureAppDataDir();
     const filePath = await getAuthCacheFilePath();
     const content = new TextEncoder().encode(JSON.stringify(cache, null, 2));
     await writeFile(filePath, content);
   } catch (error) {
     // 缓存保存失败不影响主流程
+    logError('保存授权缓存失败', error);
   }
 }
 
@@ -89,10 +91,30 @@ async function getAuthStateFilePath(): Promise<string> {
 }
 
 /**
+ * 确保应用数据目录存在
+ */
+async function ensureAppDataDir(): Promise<void> {
+  try {
+    const { exists, mkdir } = await import('@tauri-apps/plugin-fs');
+    const appDir = await appDataDir();
+    const dirExists = await exists(appDir);
+    
+    if (!dirExists) {
+      await mkdir(appDir, { recursive: true });
+      logInfo('应用数据目录已创建');
+    }
+  } catch (error) {
+    logError('创建应用数据目录失败', error);
+    throw error;
+  }
+}
+
+/**
  * 保存授权状态到本地
  */
 export async function saveAuthState(authState: AuthState): Promise<void> {
   try {
+    await ensureAppDataDir();
     const filePath = await getAuthStateFilePath();
     const content = new TextEncoder().encode(JSON.stringify(authState, null, 2));
     await writeFile(filePath, content);
@@ -156,9 +178,9 @@ export async function clearAuthState(): Promise<void> {
     };
     const content = new TextEncoder().encode(JSON.stringify(emptyState, null, 2));
     await writeFile(filePath, content);
-    console.log('本地授权状态已清除');
+    logInfo('本地授权状态已清除');
   } catch (error) {
-    console.error('清除授权状态失败:', error);
+    logError('清除授权状态失败', error);
     throw error;
   }
 }
@@ -181,91 +203,98 @@ export async function clearAuthCache(): Promise<void> {
 }
 
 /**
+ * 检查并更新授权状态的过期时间
+ */
+async function updateAuthStateExpiry(
+  authState: AuthState,
+  expiresAt?: string
+): Promise<AuthState> {
+  if (expiresAt && expiresAt !== authState.expiresAt) {
+    const updatedAuthState = {
+      ...authState,
+      expiresAt
+    };
+    await saveAuthState(updatedAuthState);
+    return updatedAuthState;
+  }
+  return authState;
+}
+
+/**
+ * 使用后端验证授权状态
+ */
+async function validateWithBackend(authState: AuthState): Promise<AuthState | null> {
+  logInfo('缓存未命中，验证后端授权状态');
+  
+  try {
+    const result = await auth({
+      device_id: authState.deviceId,
+      license_code: authState.licenseCode
+    } as AuthRequest);
+    
+    if (result.status === 'ok') {
+      logInfo('后端验证通过，授权状态有效');
+      
+      // 更新缓存
+      await saveAuthCache({
+        lastValidation: new Date().toISOString(),
+        isValid: true,
+        expiresAt: result.expires_at
+      });
+      
+      // 更新并返回授权状态
+      return await updateAuthStateExpiry(authState, result.expires_at);
+    } else {
+      logInfo(`后端验证失败，授权已被撤销: ${result.message}`);
+      
+      // 更新缓存为无效状态
+      await saveAuthCache({
+        lastValidation: new Date().toISOString(),
+        isValid: false
+      });
+      
+      // 清除无效的授权状态
+      await clearAuthState();
+      return null;
+    }
+  } catch (backendError) {
+    logError('后端验证失败，使用本地验证结果', backendError);
+    // 如果后端验证失败（网络问题等），仍然使用本地验证结果
+    // 但不更新缓存，下次重试
+    return authState;
+  }
+}
+
+/**
  * 验证本地授权状态（带缓存优化）
  */
 export async function validateLocalAuth(): Promise<AuthState | null> {
   try {
+    // 1. 读取本地授权状态
     const authState = await readAuthState();
     if (!authState) {
       return null;
     }
 
-    // 检查本地状态是否有效
+    // 2. 检查本地状态是否有效
     if (!isAuthStateValid(authState)) {
-      console.log('本地授权状态已过期或无效');
-      // 清除过期的授权状态
+      logInfo('本地授权状态已过期或无效');
       await clearAuthState();
-      await clearAuthCache(); // 清除缓存
+      await clearAuthCache();
       return null;
     }
 
-    // 检查缓存
+    // 3. 检查缓存
     const cache = await readAuthCache();
     if (cache && cache.isValid) {
-      console.log('使用缓存的验证结果');
-      // 更新过期时间（如果缓存中有）
-      if (cache.expiresAt && cache.expiresAt !== authState.expiresAt) {
-        const updatedAuthState = {
-          ...authState,
-          expiresAt: cache.expiresAt
-        };
-        await saveAuthState(updatedAuthState);
-        return updatedAuthState;
-      }
-      return authState;
+      logInfo('使用缓存的验证结果');
+      return await updateAuthStateExpiry(authState, cache.expiresAt);
     }
 
-    // 缓存未命中或已过期，调用后端验证
-    try {
-      console.log('缓存未命中，验证后端授权状态');
-      const result = await auth({
-        device_id: authState.deviceId,
-        license_code: authState.licenseCode
-      } as AuthRequest);
-      
-      if (result.status === 'ok') {
-        console.log('后端验证通过，授权状态有效');
-        
-        // 更新缓存
-        const newCache: AuthCache = {
-          lastValidation: new Date().toISOString(),
-          isValid: true,
-          expiresAt: result.expires_at
-        };
-        await saveAuthCache(newCache);
-        
-        // 更新过期时间（如果后端返回新的）
-        if (result.expires_at && result.expires_at !== authState.expiresAt) {
-          const updatedAuthState = {
-            ...authState,
-            expiresAt: result.expires_at
-          };
-          await saveAuthState(updatedAuthState);
-          return updatedAuthState;
-        }
-        return authState;
-      } else {
-        console.log('后端验证失败，授权已被撤销:', result.message);
-        
-        // 更新缓存为无效状态
-        const invalidCache: AuthCache = {
-          lastValidation: new Date().toISOString(),
-          isValid: false
-        };
-        await saveAuthCache(invalidCache);
-        
-        // 清除无效的授权状态
-        await clearAuthState();
-        return null;
-      }
-    } catch (backendError) {
-      console.warn('后端验证失败，使用本地验证结果:', backendError);
-      // 如果后端验证失败（网络问题等），仍然使用本地验证结果
-      // 但不更新缓存，下次重试
-      return authState;
-    }
+    // 4. 缓存未命中，调用后端验证
+    return await validateWithBackend(authState);
   } catch (error) {
-    console.error('验证本地授权状态失败:', error);
+    logError('验证本地授权状态失败', error);
     return null;
   }
 }

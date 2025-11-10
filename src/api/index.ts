@@ -1,53 +1,102 @@
-import axios from 'axios';
+import { fetch } from '@tauri-apps/plugin-http';
 import type { AuthRequest, AuthResponse, SubmitTaskRequest, SubmitTaskResponse, TaskStatusResponse, GetKeysRequest, GetKeysResponse } from '../types/api';
 import { config } from '../config';
 
-const baseURL = config.apiBaseURL;
-const api = axios.create({
-  baseURL,
-  timeout: 10000
-});
-
 // 设备授权接口
 export async function auth(data: AuthRequest): Promise<AuthResponse> {
-  const res = await api.post<AuthResponse>('/api/auth/login', data);
-  return res.data;
+  const response = await fetch(`${config.apiBaseURL}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || error.message || 'Authorization failed');
+  }
+  
+  return await response.json();
 }
 
 // 提交任务接口
 export async function submitTask(data: SubmitTaskRequest): Promise<SubmitTaskResponse> {
-  const res = await api.post<SubmitTaskResponse>('/api/submit_task', data);
-  return res.data;
+  const response = await fetch(`${config.apiBaseURL}/api/submit_task`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Submit task failed');
+  }
+  
+  return await response.json();
 }
 
 // 查询任务状态接口
 export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse> {
-  const res = await api.get<TaskStatusResponse>(`/api/task_status/${taskId}`);
-  return res.data;
+  const response = await fetch(`${config.apiBaseURL}/api/task_status/${taskId}`, {
+    method: 'GET',
+  });
+  
+  if (!response.ok) {
+    throw new Error('Get task status failed');
+  }
+  
+  return await response.json();
 }
 
 // 获取解密密钥接口
 export async function getKeys(data: GetKeysRequest): Promise<GetKeysResponse> {
-  const res = await api.post<GetKeysResponse>('/api/get_keys', data);
-  return res.data;
+  const response = await fetch(`${config.apiBaseURL}/api/get_keys`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    let errorMessage = `获取密钥失败 (HTTP ${response.status})`;
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || error.message || errorMessage;
+    } catch {
+      // 无法解析错误响应
+    }
+    throw new Error(errorMessage);
+  }
+  
+  return await response.json();
 }
 
 // 获取下载文件信息（保留，用于兼容）
 export async function getDownloadInfo(taskId: string) {
-  const res = await api.get(`/api/download/${taskId}/info`);
-  return res.data;
+  const response = await fetch(`${config.apiBaseURL}/api/download/${taskId}/info`, {
+    method: 'GET',
+  });
+  
+  if (!response.ok) {
+    throw new Error('Get download info failed');
+  }
+  
+  return await response.json();
 }
 
-// 下载产物，返回 Axios 原始响应，可用于处理 blob 下载（保留，用于兼容）
-export async function download(taskId: string, onProgress?: (progress: number) => void) {
-  const res = await api.get(`/api/download/${taskId}`, {
-    responseType: 'blob',
-    onDownloadProgress: (progressEvent) => {
-      if (onProgress && progressEvent.total) {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        onProgress(percentCompleted);
-      }
-    },
+// 下载产物（保留，用于兼容）
+export async function download(taskId: string, _onProgress?: (progress: number) => void) {
+  const response = await fetch(`${config.apiBaseURL}/api/download/${taskId}`, {
+    method: 'GET',
   });
-  return res.data;
+  
+  if (!response.ok) {
+    throw new Error('Download failed');
+  }
+  
+  // TODO: 实现进度回调
+  return await response.blob();
 }

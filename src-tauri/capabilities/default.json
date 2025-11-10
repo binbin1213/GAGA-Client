@@ -3,9 +3,25 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "history",
+    "settings",
+    "auth"
   ],
   "permissions": [
+    "http:default",
+    "http:allow-fetch",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://gaga.binbino.cn:88/*"
+        }
+      ]
+    },
+    "core:webview:allow-create-webview",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-create",
     "core:default",
     "core:window:allow-close",
     "core:window:allow-hide",
@@ -15,11 +31,9 @@
     "core:window:allow-unmaximize",
     "core:window:allow-is-maximized",
     "core:window:allow-start-dragging",
-    "dialog:allow-save",
-    "dialog:allow-open",
-    "dialog:allow-message",
-    "dialog:allow-ask",
-    "dialog:allow-confirm",
+    "core:window:allow-set-focus",
+    "core:window:allow-center",
+    "dialog:default",
     "fs:default",
     "fs:allow-read-file",
     "fs:allow-write-file",
@@ -28,14 +42,33 @@
     "fs:allow-read-dir",
     "fs:allow-create",
     "fs:allow-remove",
+    "fs:allow-rename",
     "fs:allow-exists",
     "fs:allow-mkdir",
-    "fs:scope-appdata",
-    "fs:scope-appdata-recursive",
-    "fs:scope-download",
+    "fs:allow-stat",
+    "fs:allow-lstat",
+    "fs:allow-fstat",
+    "fs:allow-read",
+    "fs:allow-write",
+    "fs:allow-open",
+    "fs:allow-copy-file",
+    "fs:allow-appdata-write",
+    "fs:allow-appdata-write-recursive",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-read-recursive",
+    {
+      "identifier": "fs:scope-appdata-recursive",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    "fs:scope-appconfig-recursive",
     "fs:scope-download-recursive",
-    "fs:scope-home",
     "fs:scope-home-recursive",
-    "core:path:default"
+    "core:path:default",
+    "shell:allow-execute",
+    "shell:allow-open"
   ]
 }

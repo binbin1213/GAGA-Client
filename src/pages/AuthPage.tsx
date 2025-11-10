@@ -1,343 +1,309 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import type { CSSProperties } from 'react';
+import { downieTheme } from '../styles/downie-theme';
 import { auth } from '../api';
-import type { AuthRequest, AuthResponse } from '../types/api';
 import { saveAuthState } from '../utils/auth';
-import { getDeviceId } from '../utils/deviceId';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { closeCurrentWindow } from '../utils/windowManager';
 
-interface Props {
-  onAuthed?: (deviceId: string, license: string) => void;
-  deviceId?: string;
-  onBack?: () => void;
+
+interface AuthPageProps {
+  deviceId: string;
+  onAuthed: (deviceId: string, licenseCode: string) => void;
 }
 
-export default function AuthPage({ onAuthed, deviceId: initialDeviceId, onBack }: Props) {
-  const [deviceId, setDeviceId] = useState('正在获取设备码...');
-  const [licenseCode, setLicenseCode] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const [msg, setMsg] = useState('');
-
-  // 获取设备码
-  useEffect(() => {
-    const fetchDeviceId = async () => {
-      try {
-        const id = await getDeviceId();
-        setDeviceId(id);
-      } catch (error) {
-        console.error('获取设备码失败:', error);
-        // 浏览器环境降级方案
-        const fallbackId = `browser_${navigator.userAgent.length}_${Date.now().toString(36)}`;
-        setDeviceId(fallbackId);
-      }
-    };
-
-    if (!initialDeviceId) {
-      fetchDeviceId();
-    } else {
-      setDeviceId(initialDeviceId);
-    }
-  }, [initialDeviceId]);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(deviceId);
-    setMsg('已复制设备码');
-    setTimeout(() => setMsg(''), 1500);
-  };
+export default function AuthPage({ deviceId, onAuthed }: AuthPageProps) {
+  const [licenseCode, setLicenseCode] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<boolean>(false);
 
   const handleAuth = async () => {
-    if (!deviceId || !licenseCode) {
-      setStatus('failed');
-      setMsg('请输入设备码与授权码');
+    if (!licenseCode.trim()) {
+      setError('请输入授权码');
       return;
     }
-    
+
+    setLoading(true);
+    setError('');
+
     try {
-      const result: AuthResponse = await auth({ device_id: deviceId, license_code: licenseCode } as AuthRequest);
-      setStatus(result.status);
-      setMsg(result.message || (result.status === 'ok' ? '授权成功' : '认证失败'));
-      
-      if (result.status === 'ok' && onAuthed) {
-        // 保存授权状态到本地
+      const result = await auth({
+        device_id: deviceId,
+        license_code: licenseCode.trim(),
+      });
+
+      if (result.status === 'ok') {
+        // 保存授权状态
+        await saveAuthState({
+          deviceId,
+          licenseCode: licenseCode.trim(),
+          expiresAt: result.expires_at,
+          authorizedAt: new Date().toISOString(),
+          isValid: true,
+        });
+
+        // 通知父组件
+        onAuthed(deviceId, licenseCode.trim());
+        
+        // 发送全局事件通知其他窗口
         try {
-          const authState = {
+          const { emit } = await import('@tauri-apps/api/event');
+          await emit('auth-success', {
             deviceId,
-            licenseCode,
-            authorizedAt: new Date().toISOString(),
-            expiresAt: result.expires_at, // 如果后端返回过期时间
-            isValid: true
-          };
-          await saveAuthState(authState);
-          console.log('授权状态已保存，下次启动无需重新授权');
-        } catch (saveError) {
-          console.error('保存授权状态失败:', saveError);
-          // 不影响授权流程，继续执行
+            licenseCode: licenseCode.trim(),
+          });
+        } catch (emitError) {
+          console.error('发送授权成功事件失败:', emitError);
         }
         
-        setTimeout(() => onAuthed(deviceId, licenseCode), 600);
+        // 显示成功状态
+        setSuccess(true);
+        
+        // 2秒后自动关闭窗口
+        setTimeout(async () => {
+          await closeCurrentWindow();
+        }, 2000);
+      } else {
+        setError(result.message || '授权失败');
       }
-    } catch (e: any) {
-      setStatus('failed');
-      // 显示后端返回的具体错误信息
-      const errorMsg = e?.response?.data?.detail || e?.response?.data?.message || e?.message || '认证异常，无法连接服务器';
-      setMsg(errorMsg);
+    } catch (err: any) {
+      setError(`授权失败: ${err.message || err}`);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const copyDeviceId = async () => {
+    try {
+      await navigator.clipboard.writeText(deviceId);
+      // TODO: 显示复制成功提示
+    } catch (error) {
+      console.error('复制失败:', error);
+    }
+  };
+
+  // 样式
+  const containerStyle: CSSProperties = {
+    width: '100vw',
+    height: '100vh',
+    background: downieTheme.glass.main.background,
+    backdropFilter: downieTheme.glass.main.backdropFilter,
+    WebkitBackdropFilter: downieTheme.glass.main.backdropFilter,
+    display: 'flex',
+    flexDirection: 'column',
+    fontFamily: downieTheme.fonts.system,
+  };
+
+  const contentStyle: CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: downieTheme.spacing.xl,
+  };
+
+  const formStyle: CSSProperties = {
+    width: '100%',
+    maxWidth: '500px',
+    background: downieTheme.glass.card.background,
+    backdropFilter: downieTheme.glass.card.backdropFilter,
+    WebkitBackdropFilter: downieTheme.glass.card.backdropFilter,
+    borderRadius: downieTheme.radius.card,
+    boxShadow: downieTheme.shadows.card,
+    padding: `${downieTheme.spacing.xl} ${downieTheme.spacing.xl}`,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: downieTheme.spacing.xl,
+  };
+
+  const formTitleStyle: CSSProperties = {
+    fontSize: '24px',
+    fontWeight: downieTheme.fontWeights.semibold,
+    color: downieTheme.colors.text.primary,
+    textAlign: 'center',
+    marginBottom: downieTheme.spacing.base,
+  };
+
+  const formDescStyle: CSSProperties = {
+    fontSize: downieTheme.fontSizes.body,
+    color: downieTheme.colors.text.tertiary,
+    textAlign: 'center',
+    lineHeight: '1.5',
+  };
+
+  const fieldStyle: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: downieTheme.spacing.sm,
+  };
+
+  const labelStyle: CSSProperties = {
+    fontSize: downieTheme.fontSizes.body,
+    fontWeight: downieTheme.fontWeights.semibold,
+    color: downieTheme.colors.text.primary,
+  };
+
+  const deviceIdContainerStyle: CSSProperties = {
+    display: 'flex',
+    gap: downieTheme.spacing.sm,
+  };
+
+  const deviceIdInputStyle: CSSProperties = {
+    flex: 1,
+    padding: `${downieTheme.spacing.md} ${downieTheme.spacing.base}`,
+    fontSize: downieTheme.fontSizes.caption,
+    fontFamily: downieTheme.fonts.mono,
+    color: downieTheme.colors.text.tertiary,
+    background: 'rgba(0, 0, 0, 0.05)',
+    border: `0.5px solid ${downieTheme.colors.border.light}`,
+    borderRadius: downieTheme.radius.button,
+    outline: 'none',
+  };
+
+  const copyButtonStyle: CSSProperties = {
+    padding: `${downieTheme.spacing.md} ${downieTheme.spacing.lg}`,
+    background: 'rgba(0, 0, 0, 0.05)',
+    color: downieTheme.colors.text.secondary,
+    border: `0.5px solid ${downieTheme.colors.border.light}`,
+    borderRadius: downieTheme.radius.button,
+    fontSize: downieTheme.fontSizes.body,
+    fontWeight: downieTheme.fontWeights.regular,
+    cursor: 'pointer',
+    fontFamily: downieTheme.fonts.system,
+  };
+
+  const inputStyle: CSSProperties = {
+    padding: `${downieTheme.spacing.md} ${downieTheme.spacing.base}`,
+    fontSize: downieTheme.fontSizes.body,
+    fontFamily: downieTheme.fonts.system,
+    color: downieTheme.colors.text.primary,
+    background: downieTheme.glass.card.background,
+    border: `0.5px solid ${downieTheme.colors.border.light}`,
+    borderRadius: downieTheme.radius.button,
+    outline: 'none',
+    transition: `border-color ${downieTheme.transitions.fast}`,
+  };
+
+  const submitButtonStyle: CSSProperties = {
+    padding: `${downieTheme.spacing.base} ${downieTheme.spacing.xl}`,
+    background: loading ? 'rgba(175, 82, 222, 0.5)' : downieTheme.colors.accent,
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: downieTheme.radius.button,
+    fontSize: downieTheme.fontSizes.body,
+    fontWeight: downieTheme.fontWeights.semibold,
+    cursor: loading ? 'not-allowed' : 'pointer',
+    fontFamily: downieTheme.fonts.system,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: downieTheme.spacing.sm,
+  };
+
+  const errorStyle: CSSProperties = {
+    padding: downieTheme.spacing.base,
+    background: 'rgba(255, 59, 48, 0.1)',
+    color: '#FF3B30',
+    borderRadius: downieTheme.radius.button,
+    fontSize: downieTheme.fontSizes.body,
+    textAlign: 'center',
+  };
+
+  const successStyle: CSSProperties = {
+    padding: downieTheme.spacing.base,
+    background: 'rgba(52, 199, 89, 0.1)',
+    color: '#34C759',
+    borderRadius: downieTheme.radius.button,
+    fontSize: downieTheme.fontSizes.body,
+    textAlign: 'center',
   };
 
   return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      background: '#f5f5f5',
-      display: 'flex',
-      flexDirection: 'column',
-      margin: 0,
-      padding: 0,
-      overflow: 'hidden',
-      boxSizing: 'border-box'
-    }}>
-      {/* 顶部窗口控制栏 */}
-      <div 
-        data-tauri-drag-region
-        style={{
-          background: '#ffffff',
-          padding: '0',
-          height: '36px',
-          borderBottom: '1px solid #e0e0e0',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center'
-        }}>
-        <div style={{ display: 'flex', gap: '1px' }}>
-          <button
-            onClick={() => getCurrentWindow().minimize()}
-            style={{
-              width: '36px',
-              height: '36px',
-              background: 'transparent',
-              color: '#606060',
-              border: 'none',
-              fontSize: '14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0
-            }}
-          >
-            −
-          </button>
-          <button
-            onClick={async () => {
-              const window = getCurrentWindow();
-              if (await window.isMaximized()) {
-                await window.unmaximize();
-              } else {
-                await window.maximize();
-              }
-            }}
-            style={{
-              width: '36px',
-              height: '36px',
-              background: 'transparent',
-              color: '#606060',
-              border: 'none',
-              fontSize: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0
-            }}
-          >
-            □
-          </button>
-          <button
-            onClick={() => getCurrentWindow().hide()}
-            style={{
-              width: '36px',
-              height: '36px',
-              background: 'transparent',
-              color: '#606060',
-              border: 'none',
-              fontSize: '16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0
-            }}
-          >
-            ×
-          </button>
-        </div>
-      </div>
-
-      {/* 授权表单区域 */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px'
-      }}>
-        <div style={{
-        width: '480px',
-        maxWidth: '100%',
-        background: '#ffffff',
-        padding: '40px',
-        border: '1px solid #e0e0e0',
-        boxSizing: 'border-box',
-        position: 'relative'
-      }}>
-        {/* 返回按钮 */}
-        {onBack && (
-          <button
-            onClick={onBack}
-            style={{
-              position: 'absolute',
-              top: '16px',
-              left: '16px',
-              padding: '8px 16px',
-              background: '#ffffff',
-              color: '#333333',
-              border: '1px solid #d0d0d0',
-              fontSize: '13px',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              cursor: 'pointer'
-            }}
-          >
-            ← 返回
-          </button>
-        )}
-
-        <div style={{ marginBottom: '32px', textAlign: 'center' }}>
-          <h1 style={{
-            fontSize: '20px',
-            fontWeight: '600',
-            color: '#1a1a1a',
-            margin: '0 0 8px 0',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            letterSpacing: '-0.5px'
-          }}>
-            设备授权
-          </h1>
-          <p style={{
-            fontSize: '13px',
-            color: '#666666',
-            margin: 0,
-            fontFamily: 'system-ui, -apple-system, sans-serif'
-          }}>
-            请输入授权码以激活应用
-          </p>
-        </div>
-
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '13px',
-            fontWeight: '500',
-            color: '#333333',
-            marginBottom: '10px',
-            fontFamily: 'system-ui, -apple-system, sans-serif'
-          }}>
-            设备码
-          </label>
-          <div style={{
-            padding: '14px 16px',
-            border: '1px solid #e0e0e0',
-            backgroundColor: '#f9f9f9',
-            fontSize: '13px',
-            fontFamily: 'Consolas, Monaco, monospace',
-            wordBreak: 'break-all',
-            color: '#333333',
-            lineHeight: '1.6',
-            marginBottom: '12px'
-          }}>
-            {deviceId}
+    <div style={containerStyle}>
+      {/* 内容 */}
+      <div style={contentStyle}>
+        <div style={formStyle}>
+          <div>
+            <div style={formTitleStyle}>设备授权</div>
+            <div style={formDescStyle}>输入授权码以使用下载功能</div>
           </div>
-          <button
-            onClick={handleCopy}
-            style={{
-              width: '100%',
-              padding: '11px',
-              backgroundColor: '#f5f5f5',
-              color: '#333333',
-              border: '1px solid #d0d0d0',
-              fontSize: '13px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              fontFamily: 'system-ui, -apple-system, sans-serif'
-            }}
-          >
-            复制设备码
-          </button>
-        </div>
 
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '13px',
-            fontWeight: '500',
-            color: '#333333',
-            marginBottom: '10px',
-            fontFamily: 'system-ui, -apple-system, sans-serif'
-          }}>
-            授权码
-          </label>
-          <input
-            type="password"
-            value={licenseCode}
-            onChange={e => setLicenseCode(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
-            style={{
-              width: '100%',
-              padding: '14px 16px',
-              border: '1px solid #d0d0d0',
-              fontSize: '14px',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              backgroundColor: '#ffffff',
-              color: '#1a1a1a',
-              boxSizing: 'border-box',
-              outline: 'none'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#0066ff'}
-            onBlur={(e) => e.target.style.borderColor = '#d0d0d0'}
-            placeholder="请输入授权码"
-          />
-        </div>
-
-        <button
-          onClick={handleAuth}
-          style={{
-            width: '100%',
-            padding: '14px',
-            backgroundColor: '#0066ff',
-            color: '#ffffff',
-            border: 'none',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            marginBottom: '20px'
-          }}
-        >
-          提交授权
-        </button>
-
-        {/* 状态消息 */}
-        {msg && (
-          <div style={{
-            padding: '14px 16px',
-            fontSize: '13px',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            backgroundColor: status === 'ok' ? '#f0fdf4' : '#fef2f2',
-            color: status === 'ok' ? '#166534' : '#dc2626',
-            border: `1px solid ${status === 'ok' ? '#bbf7d0' : '#fecaca'}`,
-            textAlign: 'center'
-          }}>
-            {status === 'ok' ? '✓ ' : '✗ '}{msg}
+          {/* 设备 ID */}
+          <div style={fieldStyle}>
+            <div style={labelStyle}>设备 ID</div>
+            <div style={deviceIdContainerStyle}>
+              <input type="text" value={deviceId} readOnly style={deviceIdInputStyle} />
+              <button
+                style={copyButtonStyle}
+                onClick={copyDeviceId}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)';
+                }}
+              >
+                复制
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* 授权码 */}
+          <div style={fieldStyle}>
+            <div style={labelStyle}>授权码</div>
+            <input
+              type="text"
+              value={licenseCode}
+              onChange={(e) => setLicenseCode(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+              placeholder="请输入授权码"
+              style={inputStyle}
+              disabled={success}
+              onFocus={(e) => {
+                e.target.style.borderColor = downieTheme.colors.accent;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = downieTheme.colors.border.light;
+              }}
+            />
+          </div>
+
+          {/* 错误提示 */}
+          {error && <div style={errorStyle}>{error}</div>}
+
+          {/* 成功提示 */}
+          {success && <div style={successStyle}>✅ 授权成功！窗口即将关闭...</div>}
+
+          {/* 提交按钮 */}
+          {!success && (
+            <button
+              style={submitButtonStyle}
+              onClick={handleAuth}
+              disabled={loading}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.transform = 'scale(0.98)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              {loading && (
+                <div
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid currentColor',
+                    borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 0.6s linear infinite',
+                  }}
+                />
+              )}
+              {loading ? '验证中...' : '验证授权'}
+            </button>
+          )}
         </div>
       </div>
     </div>

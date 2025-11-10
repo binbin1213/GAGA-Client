@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import TaskPage from './pages/TaskPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
@@ -6,63 +6,61 @@ import AuthPage from './pages/AuthPage';
 import { getDeviceId } from './utils/deviceId';
 import { validateLocalAuth, clearAuthState } from './utils/auth';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { logInfo, logError } from './utils/logger';
 import './App.css';
-
-type PageType = 'task' | 'history' | 'settings' | 'auth';
 
 function App() {
   const [authed, setAuthed] = useState(false);
-  const [deviceId, setDeviceId] = useState<string>(''); // 初始化为空，等待真实设备ID
+  const [deviceId, setDeviceId] = useState<string>('');
   const [license, setLicense] = useState('');
-  const [currentPage, setCurrentPage] = useState<PageType>('task');
-  const [loading, setLoading] = useState(true); // 统一加载状态
+  const [loading, setLoading] = useState(true);
+  
+  // 根据 URL 路径确定当前页面
+  const currentPath = window.location.pathname;
 
   useEffect(() => {
-    // 设置窗口最小化到托盘的行为
+    // 设置窗口最小化到托盘的行为（仅主窗口）
     const setupWindow = async () => {
       const window = getCurrentWindow();
       
-      // 监听窗口关闭事件，改为隐藏到托盘
-      const unlisten = window.onCloseRequested(async (event) => {
-        event.preventDefault();
-        await window.hide();
-      });
-
-      return unlisten;
+      // 只有主窗口才隐藏到托盘，其他窗口直接关闭
+      if (currentPath === '/') {
+        const unlisten = window.onCloseRequested(async (event) => {
+          event.preventDefault();
+          await window.hide();
+        });
+        return unlisten;
+      }
     };
 
     const initializeApp = async () => {
       try {
-        console.log('正在初始化应用...');
+        logInfo('正在初始化应用...');
         
         // 1. 获取设备ID
         const id = await getDeviceId();
         setDeviceId(id);
-        console.log('设备ID已初始化:', id);
+        logInfo(`设备ID已初始化: ${id}`);
 
-        // 2. 检查本地授权状态（但不强制要求授权）
+        // 2. 检查本地授权状态
         const authState = await validateLocalAuth();
         if (authState && authState.deviceId === id) {
-          // 授权状态有效且设备ID匹配
           setLicense(authState.licenseCode);
           setAuthed(true);
-          console.log('本地授权状态有效');
+          logInfo('本地授权状态有效');
         } else {
-          console.log('未授权或授权已过期，可在设置中进行授权');
-          // 清除不匹配的授权状态
+          logInfo('未授权或授权已过期');
           if (authState) {
             await clearAuthState();
           }
         }
       } catch (error) {
-        console.error('应用初始化失败:', error);
-        // 发生错误时，清除可能存在的无效授权状态
+        logError('应用初始化失败', error);
         try {
           await clearAuthState();
         } catch (clearError) {
-          console.error('清除授权状态失败:', clearError);
+          logError('清除授权状态失败', clearError);
         }
-        // 设置降级设备ID
         setDeviceId(`fallback_${Date.now()}`);
       } finally {
         setLoading(false);
@@ -71,37 +69,78 @@ function App() {
 
     setupWindow();
     initializeApp();
-  }, []);
 
-  // 当授权成功时跳转到任务页 - 使用 useCallback 优化性能
-  const handleAuthed = useCallback((device: string, code: string) => {
+    // 监听授权成功事件
+    let unlisten: (() => void) | undefined;
+    const setupAuthListener = async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      unlisten = await listen('auth-success', (event: any) => {
+        logInfo('收到授权成功事件');
+        const { deviceId: newDeviceId, licenseCode } = event.payload;
+        handleAuthed(newDeviceId, licenseCode);
+      });
+    };
+    setupAuthListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [currentPath]);
+
+  const handleAuthed = (device: string, code: string) => {
     setDeviceId(device);
     setLicense(code);
     setAuthed(true);
-  }, []);
+    logInfo('授权状态已更新');
+  };
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 400, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <div>正在初始化应用...</div>
-        <div style={{ fontSize: 12, color: '#666', marginTop: 8 }}>获取设备信息并检查授权状态</div>
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+          background: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        }}
+      >
+        <div style={{ fontSize: '48px' }}>⏳</div>
+        <div style={{ fontSize: '17px', color: '#1d1d1f' }}>正在初始化应用...</div>
+        <div style={{ fontSize: '13px', color: '#86868b' }}>获取设备信息并检查授权状态</div>
       </div>
     );
   }
 
-  const handlePageChange = (page: PageType) => {
-    setCurrentPage(page);
-  };
-
-  switch (currentPage) {
-    case 'history':
-      return <HistoryPage key="history" onBack={() => handlePageChange('task')} />;
-    case 'settings':
-      return <SettingsPage key={`settings-${Date.now()}`} onBack={() => handlePageChange('task')} deviceId={deviceId} authed={authed} onAuthed={handleAuthed} />;
-    case 'auth':
-      return <AuthPage key="auth" deviceId={deviceId} onAuthed={(device, code) => { handleAuthed(device, code); handlePageChange('task'); }} onBack={() => handlePageChange('task')} />;
+  // 根据路径渲染不同的页面
+  switch (currentPath) {
+    case '/history':
+      return <HistoryPage />;
+    case '/settings':
+      return <SettingsPage deviceId={deviceId} authed={authed} />;
+    case '/auth':
+      return (
+        <AuthPage
+          deviceId={deviceId}
+          onAuthed={handleAuthed}
+        />
+      );
     default:
-      return <TaskPage key="task" deviceId={deviceId} licenseCode={license} authed={authed} onShowHistory={() => handlePageChange('history')} onShowSettings={() => handlePageChange('settings')} onShowAuth={() => handlePageChange('auth')} />;
+      return (
+        <TaskPage
+          deviceId={deviceId}
+          licenseCode={license}
+          authed={authed}
+        />
+      );
   }
 }
 

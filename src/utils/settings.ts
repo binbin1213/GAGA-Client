@@ -2,8 +2,10 @@
  * 应用配置管理工具
  */
 
-import { readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, BaseDirectory, mkdir, exists } from '@tauri-apps/plugin-fs';
+import { appDataDir } from '@tauri-apps/api/path';
 import type { AppSettings } from '../types/config';
+import { logInfo, logError } from './logger';
 
 const SETTINGS_FILE = 'app_settings.json';
 
@@ -34,8 +36,26 @@ export async function readSettings(): Promise<AppSettings> {
     return { ...DEFAULT_SETTINGS, ...settings };
   } catch (error) {
     // 文件不存在或读取失败，返回默认配置
-    console.log('配置文件不存在，使用默认配置');
+    logInfo('配置文件不存在，使用默认配置');
     return DEFAULT_SETTINGS;
+  }
+}
+
+/**
+ * 确保应用数据目录存在
+ */
+async function ensureAppDataDir(): Promise<void> {
+  try {
+    const appDir = await appDataDir();
+    const dirExists = await exists(appDir);
+    
+    if (!dirExists) {
+      await mkdir(appDir, { recursive: true });
+      logInfo('应用数据目录已创建');
+    }
+  } catch (error) {
+    logError('创建应用数据目录失败', error);
+    throw error;
   }
 }
 
@@ -44,11 +64,14 @@ export async function readSettings(): Promise<AppSettings> {
  */
 export async function writeSettings(settings: AppSettings): Promise<void> {
   try {
+    // 确保目录存在
+    await ensureAppDataDir();
+    
     const content = JSON.stringify(settings, null, 2);
     await writeTextFile(SETTINGS_FILE, content, { baseDir: BaseDirectory.AppData });
-    console.log('配置已保存');
+    logInfo('配置已保存');
   } catch (error) {
-    console.error('保存配置失败:', error);
+    logError('保存配置失败', error);
     throw error;
   }
 }
