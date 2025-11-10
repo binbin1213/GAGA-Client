@@ -51,3 +51,7 @@ Thumbs.db
 .cache
 .parcel-cache
 .eslintcache
+ 
+# Project-specific
+# Ignore runtime logs produced by bundled tools
+bin/Logs/
