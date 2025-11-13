@@ -2,3 +2,14 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# 下载的视频文件和临时文件
+*.m4s
+*.m4s.tmp
+*.mp4
+*.m4a
+*.mkv
+*.ts
+**/temp/
+**/tmp/
+再听一遍你的情歌*/

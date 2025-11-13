@@ -4,7 +4,8 @@ import { downieTheme } from '../styles/downie-theme';
 import { auth } from '../api';
 import { saveAuthState } from '../utils/auth';
 import { closeCurrentWindow } from '../utils/windowManager';
-
+import { MacButton } from '../components/ui/MacButton';
+import { MacCard } from '../components/ui/MacCard';
 
 interface AuthPageProps {
   deviceId: string;
@@ -82,59 +83,28 @@ export default function AuthPage({ deviceId, onAuthed }: AuthPageProps) {
     }
   };
 
-  // 样式
-  const containerStyle: CSSProperties = {
+  const pageStyle: CSSProperties = {
     width: '100vw',
     height: '100vh',
     background: downieTheme.glass.main.background,
     backdropFilter: downieTheme.glass.main.backdropFilter,
     WebkitBackdropFilter: downieTheme.glass.main.backdropFilter,
     display: 'flex',
-    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
     fontFamily: downieTheme.fonts.system,
   };
 
-  const contentStyle: CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: downieTheme.spacing.xl,
-  };
-
-  const formStyle: CSSProperties = {
-    width: '100%',
-    maxWidth: '500px',
-    background: downieTheme.glass.card.background,
-    backdropFilter: downieTheme.glass.card.backdropFilter,
-    WebkitBackdropFilter: downieTheme.glass.card.backdropFilter,
-    borderRadius: downieTheme.radius.card,
-    boxShadow: downieTheme.shadows.card,
-    padding: `${downieTheme.spacing.xl} ${downieTheme.spacing.xl}`,
+  const formFieldsStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    gap: downieTheme.spacing.xl,
-  };
-
-  const formTitleStyle: CSSProperties = {
-    fontSize: '24px',
-    fontWeight: downieTheme.fontWeights.semibold,
-    color: downieTheme.colors.text.primary,
-    textAlign: 'center',
-    marginBottom: downieTheme.spacing.base,
-  };
-
-  const formDescStyle: CSSProperties = {
-    fontSize: downieTheme.fontSizes.body,
-    color: downieTheme.colors.text.tertiary,
-    textAlign: 'center',
-    lineHeight: '1.5',
+    gap: downieTheme.spacing.base,
   };
 
   const fieldStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    gap: downieTheme.spacing.sm,
+    gap: downieTheme.spacing.xs,
   };
 
   const labelStyle: CSSProperties = {
@@ -143,33 +113,16 @@ export default function AuthPage({ deviceId, onAuthed }: AuthPageProps) {
     color: downieTheme.colors.text.primary,
   };
 
-  const deviceIdContainerStyle: CSSProperties = {
-    display: 'flex',
-    gap: downieTheme.spacing.sm,
-  };
-
-  const deviceIdInputStyle: CSSProperties = {
+  const monoBadgeStyle: CSSProperties = {
     flex: 1,
-    padding: `${downieTheme.spacing.md} ${downieTheme.spacing.base}`,
+    padding: `${downieTheme.spacing.sm} ${downieTheme.spacing.base}`,
     fontSize: downieTheme.fontSizes.caption,
     fontFamily: downieTheme.fonts.mono,
-    color: downieTheme.colors.text.tertiary,
-    background: 'rgba(0, 0, 0, 0.05)',
-    border: `0.5px solid ${downieTheme.colors.border.light}`,
-    borderRadius: downieTheme.radius.button,
-    outline: 'none',
-  };
-
-  const copyButtonStyle: CSSProperties = {
-    padding: `${downieTheme.spacing.md} ${downieTheme.spacing.lg}`,
-    background: 'rgba(0, 0, 0, 0.05)',
     color: downieTheme.colors.text.secondary,
-    border: `0.5px solid ${downieTheme.colors.border.light}`,
+    background: 'rgba(0, 0, 0, 0.05)',
     borderRadius: downieTheme.radius.button,
-    fontSize: downieTheme.fontSizes.body,
-    fontWeight: downieTheme.fontWeights.regular,
-    cursor: 'pointer',
-    fontFamily: downieTheme.fonts.system,
+    border: `0.5px solid ${downieTheme.colors.border.light}`,
+    outline: 'none',
   };
 
   const inputStyle: CSSProperties = {
@@ -177,135 +130,96 @@ export default function AuthPage({ deviceId, onAuthed }: AuthPageProps) {
     fontSize: downieTheme.fontSizes.body,
     fontFamily: downieTheme.fonts.system,
     color: downieTheme.colors.text.primary,
-    background: downieTheme.glass.card.background,
+    background: '#fff',
     border: `0.5px solid ${downieTheme.colors.border.light}`,
     borderRadius: downieTheme.radius.button,
     outline: 'none',
     transition: `border-color ${downieTheme.transitions.fast}`,
   };
 
-  const submitButtonStyle: CSSProperties = {
-    padding: `${downieTheme.spacing.base} ${downieTheme.spacing.xl}`,
-    background: loading ? 'rgba(175, 82, 222, 0.5)' : downieTheme.colors.accent,
-    color: '#ffffff',
-    border: 'none',
+  const hintStyle: CSSProperties = {
+    fontSize: downieTheme.fontSizes.caption,
+    color: downieTheme.colors.text.tertiary,
+    lineHeight: 1.5,
+  };
+
+  const feedbackStyle = (variant: 'error' | 'success'): CSSProperties => ({
+    padding: downieTheme.spacing.base,
     borderRadius: downieTheme.radius.button,
     fontSize: downieTheme.fontSizes.body,
-    fontWeight: downieTheme.fontWeights.semibold,
-    cursor: loading ? 'not-allowed' : 'pointer',
-    fontFamily: downieTheme.fonts.system,
+    textAlign: 'center',
+    background: variant === 'error' ? 'rgba(255, 59, 48, 0.1)' : 'rgba(52, 199, 89, 0.12)',
+    color: variant === 'error' ? '#FF3B30' : '#34C759',
+  });
+
+  const buttonGroupStyle: CSSProperties = {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: downieTheme.spacing.sm,
   };
 
-  const errorStyle: CSSProperties = {
-    padding: downieTheme.spacing.base,
-    background: 'rgba(255, 59, 48, 0.1)',
-    color: '#FF3B30',
-    borderRadius: downieTheme.radius.button,
-    fontSize: downieTheme.fontSizes.body,
-    textAlign: 'center',
-  };
-
-  const successStyle: CSSProperties = {
-    padding: downieTheme.spacing.base,
-    background: 'rgba(52, 199, 89, 0.1)',
-    color: '#34C759',
-    borderRadius: downieTheme.radius.button,
-    fontSize: downieTheme.fontSizes.body,
-    textAlign: 'center',
-  };
-
   return (
-    <div style={containerStyle}>
-      {/* 内容 */}
-      <div style={contentStyle}>
-        <div style={formStyle}>
-          <div>
-            <div style={formTitleStyle}>设备授权</div>
-            <div style={formDescStyle}>输入授权码以使用下载功能</div>
-          </div>
-
-          {/* 设备 ID */}
+    <div style={pageStyle}>
+      <MacCard
+        title="设备授权"
+        description="授权后可使用 DRM 密钥服务与下载功能。输入授权码后即可立即生效。"
+        contentStyle={{ gap: downieTheme.spacing.lg }}
+        style={{ width: '100%', maxWidth: 520 }}
+      >
+        <div style={formFieldsStyle}>
           <div style={fieldStyle}>
-            <div style={labelStyle}>设备 ID</div>
-            <div style={deviceIdContainerStyle}>
-              <input type="text" value={deviceId} readOnly style={deviceIdInputStyle} />
-              <button
-                style={copyButtonStyle}
-                onClick={copyDeviceId}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)';
-                }}
-              >
+            <span style={labelStyle}>设备 ID</span>
+            <div style={buttonGroupStyle}>
+              <input type="text" value={deviceId} readOnly style={monoBadgeStyle} />
+              <MacButton variant="secondary" onClick={copyDeviceId} disabled={loading}>
                 复制
-              </button>
+              </MacButton>
             </div>
+            <span style={hintStyle}>每台设备唯一，授权码会绑定此 ID。</span>
           </div>
 
-          {/* 授权码 */}
           <div style={fieldStyle}>
-            <div style={labelStyle}>授权码</div>
+            <span style={labelStyle}>授权码</span>
             <input
               type="text"
               value={licenseCode}
               onChange={(e) => setLicenseCode(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
-              placeholder="请输入授权码"
+              onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
+              placeholder="请输入授权码，例如 GAGA-XXXX-XXXX"
               style={inputStyle}
               disabled={success}
               onFocus={(e) => {
-                e.target.style.borderColor = downieTheme.colors.accent;
+                (e.target as HTMLInputElement).style.borderColor = downieTheme.colors.accent;
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = downieTheme.colors.border.light;
+                (e.target as HTMLInputElement).style.borderColor = downieTheme.colors.border.light;
               }}
             />
+            <span style={hintStyle}>授权码区分大小写，请准确输入。</span>
           </div>
 
-          {/* 错误提示 */}
-          {error && <div style={errorStyle}>{error}</div>}
+          {error && <div style={feedbackStyle('error')}>{error}</div>}
+          {success && <div style={feedbackStyle('success')}>✅ 授权成功，窗口即将自动关闭。</div>}
 
-          {/* 成功提示 */}
-          {success && <div style={successStyle}>✅ 授权成功！窗口即将关闭...</div>}
-
-          {/* 提交按钮 */}
           {!success && (
-            <button
-              style={submitButtonStyle}
-              onClick={handleAuth}
-              disabled={loading}
-              onMouseEnter={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.transform = 'scale(0.98)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
+            <MacButton onClick={handleAuth} disabled={loading}>
               {loading && (
-                <div
+                <span
                   style={{
-                    width: '16px',
-                    height: '16px',
+                    width: 16,
+                    height: 16,
                     border: '2px solid currentColor',
                     borderTopColor: 'transparent',
                     borderRadius: '50%',
+                    display: 'inline-block',
                     animation: 'spin 0.6s linear infinite',
                   }}
                 />
               )}
               {loading ? '验证中...' : '验证授权'}
-            </button>
+            </MacButton>
           )}
         </div>
-      </div>
+      </MacCard>
     </div>
   );
 }

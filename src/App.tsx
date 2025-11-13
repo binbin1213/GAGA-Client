@@ -7,6 +7,7 @@ import { getDeviceId } from './utils/deviceId';
 import { validateLocalAuth, clearAuthState } from './utils/auth';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { logInfo, logError } from './utils/logger';
+import { navigationConstants } from './utils/navigation';
 import './App.css';
 
 function App() {
@@ -14,9 +15,28 @@ function App() {
   const [deviceId, setDeviceId] = useState<string>('');
   const [license, setLicense] = useState('');
   const [loading, setLoading] = useState(true);
-  
-  // 根据 URL 路径确定当前页面
-  const currentPath = window.location.pathname;
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+
+    const handleNavigate = (event: Event) => {
+      const detail = (event as CustomEvent<{ path: string }>).detail;
+      if (detail?.path) {
+        setCurrentPath(detail.path);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener(navigationConstants.eventName, handleNavigate as EventListener);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener(navigationConstants.eventName, handleNavigate as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     // 设置窗口最小化到托盘的行为（仅主窗口）

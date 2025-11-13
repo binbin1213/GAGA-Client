@@ -1,0 +1,7 @@
+node_modules/
+dist/
+build/
+.venv/
+src/__tests__/
+*.test.ts
+*.test.tsx

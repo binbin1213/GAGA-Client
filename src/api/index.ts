@@ -2,15 +2,38 @@ import { fetch } from '@tauri-apps/plugin-http';
 import type { AuthRequest, AuthResponse, SubmitTaskRequest, SubmitTaskResponse, TaskStatusResponse, GetKeysRequest, GetKeysResponse } from '../types/api';
 import { config } from '../config';
 
+// 重试辅助函数
+async function fetchWithRetry(url: string, options: any, maxRetries = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await fetch(url, options);
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`请求失败 (尝试 ${i + 1}/${maxRetries}):`, error.message);
+      
+      // 如果不是最后一次尝试，等待后重试
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // 递增延迟
+      }
+    }
+  }
+  
+  throw lastError || new Error('请求失败');
+}
+
 // 设备授权接口
 export async function auth(data: AuthRequest): Promise<AuthResponse> {
-  const response = await fetch(`${config.apiBaseURL}/api/auth/login`, {
+  const response = await fetchWithRetry(`${config.apiBaseURL}/api/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(data),
-  });
+    connectTimeout: 10000,
+  }, 3);
   
   if (!response.ok) {
     const error = await response.json();
@@ -52,26 +75,36 @@ export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse>
 
 // 获取解密密钥接口
 export async function getKeys(data: GetKeysRequest): Promise<GetKeysResponse> {
-  const response = await fetch(`${config.apiBaseURL}/api/get_keys`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    let errorMessage = `获取密钥失败 (HTTP ${response.status})`;
-    try {
-      const error = await response.json();
-      errorMessage = error.detail || error.message || errorMessage;
-    } catch {
-      // 无法解析错误响应
+  try {
+    // 使用重试机制
+    const response = await fetchWithRetry(`${config.apiBaseURL}/api/get_keys`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+      connectTimeout: 10000, // 10秒连接超时
+    }, 3); // 最多重试3次
+    
+    if (!response.ok) {
+      let errorMessage = `获取密钥失败 (HTTP ${response.status})`;
+      try {
+        const error = await response.json();
+        errorMessage = error.detail || error.message || errorMessage;
+      } catch {
+        // 无法解析错误响应
+      }
+      throw new Error(errorMessage);
     }
-    throw new Error(errorMessage);
+    
+    return await response.json();
+  } catch (error: any) {
+    // 网络错误或连接失败
+    if (error.message && error.message.includes('error sending request')) {
+      throw new Error(`无法连接到服务器 (${config.apiBaseURL})，请检查：\n1. 网络连接是否正常\n2. 服务器是否运行\n3. 防火墙是否阻止连接`);
+    }
+    throw error;
   }
-  
-  return await response.json();
 }
 
 // 获取下载文件信息（保留，用于兼容）

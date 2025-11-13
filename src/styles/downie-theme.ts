@@ -118,4 +118,111 @@ export const downieTheme = {
   },
 } as const;
 
+// 常用样式对象
+export const commonStyles = {
+  // 只读输入框样式
+  readonlyInput: {
+    background: 'rgba(250,250,250,0.65)',
+    border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: 6,
+    padding: '6px 12px',
+    fontSize: '13px',
+    fontFamily: 'SF Mono, ui-monospace, Menlo, Monaco, monospace',
+    color: 'rgba(60,60,67,0.85)',
+    maxWidth: 280,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+
+  // 状态徽章
+  statusBadge: (authed: boolean) => ({
+    display: 'inline-flex' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    padding: '4px 12px',
+    borderRadius: 999,
+    background: authed
+      ? 'linear-gradient(90deg, #34C759 0%, #30D158 100%)'
+      : 'linear-gradient(90deg, #FF3B30 0%, #FF453A 100%)',
+    color: '#ffffff',
+    fontWeight: 600,
+    fontSize: '13px',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+  }),
+
+  // 设置行样式
+  settingRow: {
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    gap: 20,
+    padding: '10px 0',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
+  },
+
+  // 设置标签列
+  labelColumn: {
+    width: 160,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: 4,
+  },
+
+  // 设置标签
+  label: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'rgba(60,60,67,0.9)',
+  },
+
+  // 设置描述
+  description: {
+    fontSize: '12px',
+    color: 'rgba(60,60,67,0.6)',
+  },
+
+  // 内容列
+  contentColumn: {
+    flex: 1,
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-start' as const,
+    gap: 12,
+    flexWrap: 'wrap' as const,
+  },
+
+  // 日志列表
+  logList: {
+    maxHeight: 240,
+    overflowY: 'auto' as const,
+    padding: `${downieTheme.spacing.sm} ${downieTheme.spacing.sm}`,
+    borderRadius: downieTheme.radius.button,
+    border: `0.5px solid ${downieTheme.colors.border.light}`,
+    background: 'rgba(255, 255, 255, 0.7)',
+    fontFamily: 'Menlo, Monaco, Consolas, "SF Mono", monospace',
+    fontSize: '12px',
+  },
+
+  // 日志条目
+  logEntry: (level: string) => ({
+    display: 'flex' as const,
+    gap: downieTheme.spacing.sm,
+    alignItems: 'flex-start' as const,
+    padding: `${downieTheme.spacing.xs} ${downieTheme.spacing.sm}`,
+    borderRadius: downieTheme.radius.button,
+    background:
+      level === 'ERROR'
+        ? 'rgba(255, 59, 48, 0.12)'
+        : level === 'WARN'
+        ? 'rgba(255, 204, 0, 0.12)'
+        : 'transparent',
+    color:
+      level === 'ERROR'
+        ? '#ff3b30'
+        : level === 'WARN'
+        ? '#ff9500'
+        : downieTheme.colors.text.secondary,
+  }),
+} as const;
+
 export type DownieTheme = typeof downieTheme;

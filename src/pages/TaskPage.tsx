@@ -6,6 +6,8 @@ import { downieTheme } from '../styles/downie-theme';
 import { TaskCard } from '../components/TaskCard';
 import { Toolbar } from '../components/Toolbar';
 import { DropZone } from '../components/DropZone';
+import { AppLayout } from '../components/layout/AppLayout';
+import { navigate } from '../utils/navigation';
 import { openWindow } from '../utils/windowManager';
 
 interface TaskPageProps {
@@ -209,24 +211,26 @@ export default function TaskPage({ authed }: TaskPageProps) {
     }
   };
 
+  const handleNavigate = (target: 'tasks' | 'history' | 'settings') => {
+    const routeMap: Record<'tasks' | 'history' | 'settings', '/' | '/history' | '/settings'> = {
+      tasks: '/',
+      history: '/history',
+      settings: '/settings',
+    };
+    navigate(routeMap[target]);
+  };
+
   // 样式
   const containerStyle: CSSProperties = {
-    width: '100vw',
-    height: '100vh',
-    background: currentTask
-      ? downieTheme.glass.main.background
-      : downieTheme.glass.warm.background,
-    backdropFilter: currentTask
-      ? downieTheme.glass.main.backdropFilter
-      : downieTheme.glass.warm.backdropFilter,
-    WebkitBackdropFilter: currentTask
-      ? downieTheme.glass.main.backdropFilter
-      : downieTheme.glass.warm.backdropFilter,
+    width: '100%',
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    margin: 0,
-    padding: 0,
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    padding: '20px 0 80px',
+    boxSizing: 'border-box',
+    overflow: 'auto',
     fontFamily: downieTheme.fonts.system,
   };
 
@@ -238,7 +242,10 @@ export default function TaskPage({ authed }: TaskPageProps) {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: downieTheme.spacing.xl,
+    justifyContent: 'flex-start',
+    gap: downieTheme.spacing.lg,
+    maxWidth: '100%',
+    width: '100%',
   };
 
   const unauthorizedBoxStyle: CSSProperties = {
@@ -270,7 +277,8 @@ export default function TaskPage({ authed }: TaskPageProps) {
   };
 
   return (
-    <div style={containerStyle}>
+    <AppLayout active="tasks" onNavigate={handleNavigate}>
+      <div style={containerStyle}>
       {/* 主内容区 */}
       <div style={mainContentStyle}>
         {/* 任务卡片或拖放区域 */}
@@ -324,6 +332,7 @@ export default function TaskPage({ authed }: TaskPageProps) {
           // TODO: 打开添加任务对话框
         }}
       />
-    </div>
+      </div>
+    </AppLayout>
   );
 }

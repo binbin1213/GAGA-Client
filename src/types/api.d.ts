@@ -1,16 +1,20 @@
 // API 请求与响应类型定义
 
+// 认证相关
+export type AuthStatus = 'ok' | 'success' | 'failed' | 'error';
+
 export interface AuthRequest {
   device_id: string;
   license_code: string;
 }
 
 export interface AuthResponse {
-  status: string; // ok | failed
+  status: AuthStatus;
   message?: string;
   expires_at?: string; // 授权过期时间（ISO 8601 格式）
 }
 
+// 任务提交相关
 export interface SubmitTaskRequest {
   device_id: string;
   license_code: string;
@@ -23,19 +27,25 @@ export interface SubmitTaskRequest {
   url?: string;
 }
 
+export type TaskSubmitStatus = 'submitted' | 'failed' | 'error';
+
 export interface SubmitTaskResponse {
   task_id: string;
-  status: string;
+  status: TaskSubmitStatus;
   message?: string;
 }
 
+// 任务状态相关
+export type TaskStatus = 'submitted' | 'processing' | 'completed' | 'failed' | 'error';
+
 export interface TaskStatusResponse {
   task_id: string;
-  status: string; // submitted | processing | completed | failed
+  status: TaskStatus;
   progress?: number; // 0-100
   message?: string;
 }
 
+// 密钥获取相关
 export interface GetKeysRequest {
   device_id: string;
   license_code: string;
@@ -49,8 +59,19 @@ export interface KeyInfo {
   key: string;
 }
 
+export type KeysResponseStatus = 'ok' | 'success' | 'failed' | 'error';
+
 export interface GetKeysResponse {
-  status: string;
+  status: KeysResponseStatus;
   keys?: KeyInfo[];
   message?: string;
+}
+
+// 类型守卫函数
+export function isSuccessResponse(response: { status: string }): boolean {
+  return response.status === 'ok' || response.status === 'success';
+}
+
+export function isErrorResponse(response: { status: string }): boolean {
+  return response.status === 'failed' || response.status === 'error';
 }

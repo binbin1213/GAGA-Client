@@ -1,19 +1,106 @@
 import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import { downieTheme } from '../styles/downie-theme';
+import { downieTheme, commonStyles } from '../styles/downie-theme';
 import { readSettings, updateSettings } from '../utils/settings';
 import type { AppSettings } from '../types/config';
 import { openWindow } from '../utils/windowManager';
+import { AppLayout } from '../components/layout/AppLayout';
+import { navigate } from '../utils/navigation';
+import { MacCard } from '../components/ui/MacCard';
 
 interface SettingsPageProps {
   authed: boolean;
   deviceId: string;
 }
 
+type ButtonVariant = 'primary' | 'outline';
+
+type SettingRowProps = {
+  label: string;
+  desc?: string;
+  children: React.ReactNode;
+  bordered?: boolean;
+};
+
+const rowStyle: CSSProperties = commonStyles.settingRow;
+const labelColumnStyle: CSSProperties = commonStyles.labelColumn;
+const labelStyle: CSSProperties = commonStyles.label;
+const descStyle: CSSProperties = commonStyles.description;
+const contentColumnStyle: CSSProperties = commonStyles.contentColumn;
+
+function SettingRow({ label, desc, children, bordered = true }: SettingRowProps) {
+  return (
+    <div style={{ ...rowStyle, borderBottom: bordered ? rowStyle.borderBottom : 'none', paddingBottom: bordered ? '10px' : '0' }}>
+      <div style={labelColumnStyle}>
+        <span style={labelStyle}>{label}</span>
+        {desc && <span style={descStyle}>{desc}</span>}
+      </div>
+      <div style={contentColumnStyle}>{children}</div>
+    </div>
+  );
+}
+
+const readonlyInputStyle: CSSProperties = commonStyles.readonlyInput;
+
+const statusBadgeStyle = (authed: boolean): CSSProperties => commonStyles.statusBadge(authed);
+
+const buttonBaseStyle: CSSProperties = {
+  border: 'none',
+  borderRadius: 8,
+  padding: '6px 16px',
+  fontSize: '13px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  fontFamily: downieTheme.fonts.system,
+};
+
+const primaryButtonStyle: CSSProperties = {
+  ...buttonBaseStyle,
+  background: 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)',
+  color: '#ffffff',
+  boxShadow: '0 4px 12px rgba(168,85,247,0.25)',
+};
+
+const outlineButtonStyle: CSSProperties = {
+  ...buttonBaseStyle,
+  background: 'rgba(255,255,255,0.3)',
+  border: '1px solid rgba(0,122,255,0.5)',
+  color: '#007AFF',
+};
+
+function StyledButton({ variant, children, onClick }: { variant: ButtonVariant; children: React.ReactNode; onClick?: () => void }) {
+  const style = variant === 'primary' ? primaryButtonStyle : outlineButtonStyle;
+  return (
+    <button
+      style={style}
+      onClick={onClick}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        if (variant === 'primary') {
+          e.currentTarget.style.boxShadow = '0 6px 14px rgba(168,85,247,0.32)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        if (variant === 'primary') {
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(168,85,247,0.25)';
+        }
+      }}
+      onMouseDown={(e) => {
+        e.currentTarget.style.transform = 'scale(0.97)';
+      }}
+      onMouseUp={(e) => {
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function SettingsPage({ authed, deviceId }: SettingsPageProps) {
-  const [settings, setSettings] = useState<AppSettings>({
-    defaultDownloadDir: '',
-  });
+  const [settings, setSettings] = useState<AppSettings>({ defaultDownloadDir: '' });
 
   useEffect(() => {
     loadSettings();
@@ -31,15 +118,9 @@ export default function SettingsPage({ authed, deviceId }: SettingsPageProps) {
   const handleSelectDirectory = async () => {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({
-        directory: true,
-        title: '选择默认下载目录',
-      });
+      const selected = await open({ directory: true, title: '选择默认下载目录' });
       if (selected) {
-        const newSettings = {
-          ...settings,
-          defaultDownloadDir: selected as string,
-        };
+        const newSettings = { ...settings, defaultDownloadDir: selected as string };
         setSettings(newSettings);
         await updateSettings(newSettings);
       }
@@ -52,196 +133,83 @@ export default function SettingsPage({ authed, deviceId }: SettingsPageProps) {
     await openWindow('auth');
   };
 
-  // 样式
-  const containerStyle: CSSProperties = {
-    width: '100vw',
-    height: '100vh',
-    background: downieTheme.glass.main.background,
-    backdropFilter: downieTheme.glass.main.backdropFilter,
-    WebkitBackdropFilter: downieTheme.glass.main.backdropFilter,
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: downieTheme.fonts.system,
+  const handleNavigate = (target: 'tasks' | 'history' | 'settings') => {
+    if (target === 'settings') return;
+    const routeMap: Record<'tasks' | 'history' | 'settings', '/' | '/history' | '/settings'> = {
+      tasks: '/',
+      history: '/history',
+      settings: '/settings',
+    };
+    navigate(routeMap[target]);
   };
 
-  const contentStyle: CSSProperties = {
-    flex: 1,
-    overflowY: 'auto',
-    padding: downieTheme.spacing.xl,
+  const pageContainerStyle: CSSProperties = {
+    maxWidth: 640,
+    width: '100%',
     display: 'flex',
     flexDirection: 'column',
-    gap: downieTheme.spacing.xl,
+    gap: '16px',
+    padding: '20px 0 36px',
+    margin: '0 auto',
   };
 
-  const sectionStyle: CSSProperties = {
-    background: downieTheme.glass.card.background,
-    backdropFilter: downieTheme.glass.card.backdropFilter,
-    WebkitBackdropFilter: downieTheme.glass.card.backdropFilter,
-    borderRadius: downieTheme.radius.card,
-    boxShadow: downieTheme.shadows.card,
-    padding: downieTheme.spacing.xl,
+  const sectionHeadingStyle: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    marginTop: 12,
+    alignSelf: 'flex-start',
   };
 
   const sectionTitleStyle: CSSProperties = {
-    fontSize: downieTheme.fontSizes.title,
-    fontWeight: downieTheme.fontWeights.semibold,
-    color: downieTheme.colors.text.primary,
-    marginBottom: downieTheme.spacing.lg,
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'rgba(60,60,67,0.6)',
   };
 
-  const settingItemStyle: CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: `${downieTheme.spacing.base} 0`,
-    borderBottom: `0.5px solid ${downieTheme.colors.border.light}`,
-  };
-
-  const settingLabelStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: downieTheme.spacing.xs,
-  };
-
-  const labelTextStyle: CSSProperties = {
-    fontSize: downieTheme.fontSizes.body,
-    fontWeight: downieTheme.fontWeights.regular,
-    color: downieTheme.colors.text.primary,
-  };
-
-  const labelDescStyle: CSSProperties = {
-    fontSize: downieTheme.fontSizes.caption,
-    color: downieTheme.colors.text.tertiary,
-  };
-
-  const buttonStyle: CSSProperties = {
-    padding: `${downieTheme.spacing.sm} ${downieTheme.spacing.lg}`,
-    background: downieTheme.colors.accent,
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: downieTheme.radius.button,
-    fontSize: downieTheme.fontSizes.body,
-    fontWeight: downieTheme.fontWeights.semibold,
-    cursor: 'pointer',
-    fontFamily: downieTheme.fonts.system,
-  };
-
-  const pathTextStyle: CSSProperties = {
-    fontSize: downieTheme.fontSizes.caption,
-    color: downieTheme.colors.text.tertiary,
-    fontFamily: downieTheme.fonts.mono,
-    maxWidth: '300px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  };
-
-  const authStatusStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: downieTheme.spacing.sm,
-    fontSize: downieTheme.fontSizes.body,
-    color: authed ? '#34C759' : '#FF3B30',
-  };
-
-  const deviceIdStyle: CSSProperties = {
-    fontSize: downieTheme.fontSizes.caption,
-    color: downieTheme.colors.text.tertiary,
-    fontFamily: downieTheme.fonts.mono,
-    background: 'rgba(0, 0, 0, 0.05)',
-    padding: `${downieTheme.spacing.xs} ${downieTheme.spacing.sm}`,
-    borderRadius: downieTheme.radius.button,
-    maxWidth: '300px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+  const cardStyleOverrides: CSSProperties = {
+    padding: '20px 28px',
+    gap: 10,
   };
 
   return (
-    <div style={containerStyle}>
-      {/* 内容 */}
-      <div style={contentStyle}>
-        {/* 授权设置 */}
-        <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>授权设置</div>
-          <div style={settingItemStyle}>
-            <div style={settingLabelStyle}>
-              <div style={labelTextStyle}>授权状态</div>
-              <div style={labelDescStyle}>下载功能需要授权后才能使用</div>
-            </div>
-            <div style={authStatusStyle}>{authed ? '✅ 已授权' : '❌ 未授权'}</div>
-          </div>
-          <div style={settingItemStyle}>
-            <div style={settingLabelStyle}>
-              <div style={labelTextStyle}>设备 ID</div>
-              <div style={labelDescStyle}>用于设备识别和授权验证</div>
-            </div>
-            <div style={deviceIdStyle}>{deviceId}</div>
-          </div>
-          <div style={{ ...settingItemStyle, borderBottom: 'none' }}>
-            <div style={settingLabelStyle}>
-              <div style={labelTextStyle}>管理授权</div>
-              <div style={labelDescStyle}>添加或更新授权码</div>
-            </div>
-            <button
-              style={buttonStyle}
-              onClick={handleOpenAuth}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(0.98)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
+    <AppLayout active="settings" onNavigate={handleNavigate}>
+      <div style={pageContainerStyle}>
+
+        <div style={sectionHeadingStyle}>
+          <span style={sectionTitleStyle}>授权设置</span>
+        </div>
+        <MacCard style={cardStyleOverrides}>
+          <SettingRow label="授权状态" desc="下载功能需要授权后才能使用">
+            <span style={statusBadgeStyle(authed)}>{authed ? '已授权' : '未授权'}</span>
+          </SettingRow>
+          <SettingRow label="设备 ID" desc="用于设备识别和授权验证">
+            <span style={readonlyInputStyle}>{deviceId}</span>
+          </SettingRow>
+          <SettingRow label="管理授权" bordered={false}>
+            <StyledButton variant="primary" onClick={handleOpenAuth}>
               {authed ? '更新授权' : '立即授权'}
-            </button>
-          </div>
-        </div>
+            </StyledButton>
+          </SettingRow>
+        </MacCard>
 
-        {/* 下载设置 */}
-        <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>下载设置</div>
-          <div style={{ ...settingItemStyle, borderBottom: 'none' }}>
-            <div style={settingLabelStyle}>
-              <div style={labelTextStyle}>默认下载目录</div>
-              <div style={labelDescStyle}>新任务的默认保存位置</div>
-              {settings.defaultDownloadDir && (
-                <div style={pathTextStyle}>{settings.defaultDownloadDir}</div>
-              )}
-            </div>
-            <button
-              style={buttonStyle}
-              onClick={handleSelectDirectory}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(0.98)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
+        <div style={sectionHeadingStyle}>
+          <span style={sectionTitleStyle}>下载设置</span>
+        </div>
+        <MacCard style={cardStyleOverrides}>
+          <SettingRow label="默认下载目录" desc="新任务的默认保存位置" bordered={false}>
+            {settings.defaultDownloadDir ? (
+              <span style={readonlyInputStyle}>{settings.defaultDownloadDir}</span>
+            ) : (
+              <span style={{ ...readonlyInputStyle, color: 'rgba(60,60,67,0.4)' }}>未选择目录</span>
+            )}
+            <StyledButton variant="outline" onClick={handleSelectDirectory}>
               选择目录
-            </button>
-          </div>
-        </div>
+            </StyledButton>
+          </SettingRow>
+        </MacCard>
 
-        {/* 应用信息 */}
-        <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>应用信息</div>
-          <div style={settingItemStyle}>
-            <div style={settingLabelStyle}>
-              <div style={labelTextStyle}>版本</div>
-              <div style={labelDescStyle}>当前应用版本</div>
-            </div>
-            <div style={labelTextStyle}>1.0.0</div>
-          </div>
-          <div style={{ ...settingItemStyle, borderBottom: 'none' }}>
-            <div style={settingLabelStyle}>
-              <div style={labelTextStyle}>关于</div>
-              <div style={labelDescStyle}>GAGA Client - 视频下载工具</div>
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
+    </AppLayout>
   );
 }

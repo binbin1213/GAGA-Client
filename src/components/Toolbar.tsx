@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
 import { downieTheme } from '../styles/downie-theme';
-import { openWindow } from '../utils/windowManager';
 
 interface ToolbarProps {
   taskCount: number;
@@ -8,17 +7,6 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ taskCount, onAddTask }: ToolbarProps) {
-  const handleShowHistory = () => {
-    openWindow('history').catch((error) => {
-      console.error('打开历史记录窗口失败:', error);
-    });
-  };
-
-  const handleShowSettings = () => {
-    openWindow('settings').catch((error) => {
-      console.error('打开设置窗口失败:', error);
-    });
-  };
 
   const toolbarStyle: CSSProperties = {
     position: 'fixed',
@@ -74,59 +62,23 @@ export function Toolbar({ taskCount, onAddTask }: ToolbarProps) {
   };
 
   return (
-    <div style={toolbarStyle}>
+    <div style={toolbarStyle} role="toolbar" aria-label="下载工具栏">
       {/* 左侧按钮组 */}
       <div style={leftGroupStyle}>
         <button
+          className="btn-icon"
           style={iconButtonStyle}
           onClick={onAddTask}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.06)';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
           title="添加任务"
+          aria-label="添加新的下载任务"
         >
           ➕
-        </button>
-        <button
-          style={iconButtonStyle}
-          onClick={handleShowHistory}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.06)';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="历史记录"
-        >
-          📋
-        </button>
-        <button
-          style={iconButtonStyle}
-          onClick={handleShowSettings}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(0, 0, 0, 0.06)';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="设置"
-        >
-          ⚙️
         </button>
       </div>
 
       {/* 中间任务计数 */}
-      <div style={centerTextStyle}>
-        {taskCount === 0 ? '无任务' : taskCount === 1 ? '1 个下载' : `${taskCount} 个任务`}
+      <div style={centerTextStyle} role="status" aria-live="polite">
+        {taskCount === 0 ? '暂无任务' : taskCount === 1 ? '1 个下载' : `${taskCount} 个任务`}
       </div>
 
       {/* 右侧按钮组（预留，保持对称） */}

@@ -1,0 +1,156 @@
+/* 交互效果 CSS 样式 */
+
+/* 按钮基础样式 */
+button {
+  transition: all 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 主按钮 hover 效果 */
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 6px 14px rgba(168, 85, 247, 0.32);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 次按钮 hover 效果 */
+.btn-secondary:hover:not(:disabled) {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* 图标按钮 hover 效果 */
+.btn-icon:hover:not(:disabled) {
+  background-color: rgba(0, 0, 0, 0.06);
+  transform: scale(1.05);
+}
+
+.btn-icon:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 关闭按钮 hover 效果 */
+.btn-close:hover:not(:disabled) {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+/* 导航项 hover 效果 */
+.nav-item:hover:not(.active) {
+  background-color: rgba(47, 116, 255, 0.08);
+}
+
+/* 拖放区域 hover 效果 */
+.dropzone:hover {
+  border-color: #007AFF;
+  background-color: rgba(0, 122, 255, 0.12);
+  transform: scale(1.01);
+}
+
+.dropzone.dragging {
+  border-color: #007AFF;
+  background-color: rgba(0, 122, 255, 0.12);
+  transform: scale(1.02);
+}
+
+.dropzone .dropzone-icon {
+  transition: transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.dropzone:hover .dropzone-icon,
+.dropzone.dragging .dropzone-icon {
+  transform: scale(1.1);
+}
+
+/* 链接 hover 效果 */
+a:hover {
+  opacity: 0.7;
+  transition: opacity 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 禁用状态 */
+button:disabled,
+button:disabled:hover {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
+/* 卡片 hover 效果（可选） */
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 进度条动画 */
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: var(--progress, 0%);
+  }
+}
+
+.progress-bar {
+  animation: progress-fill 300ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* 加载动画 */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* 淡入淡出动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 200ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+.fade-out {
+  animation: fadeOut 200ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* 滑动动画 */
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.slide-up {
+  animation: slideUp 300ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
