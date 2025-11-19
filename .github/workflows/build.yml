@@ -71,6 +71,24 @@ jobs:
         rustup target add x86_64-apple-darwin
         rustup target add aarch64-apple-darwin
         
+    - name: 清理已有资产 (macOS)
+      if: matrix.platform == 'macos-latest'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        TAG=app-v1.0.0
+        RES=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
+        RID=$(echo "$RES" | jq -r '.id')
+        if [ "$RID" = "null" ] || [ -z "$RID" ]; then
+          echo "Release $TAG not found; skip cleanup"
+        else
+          echo "$RES" | jq -r '.assets[] | select(.name|test("macos")) | .id' | while read -r AID; do
+            echo "Deleting asset id: $AID"
+            curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/releases/assets/$AID" >/dev/null
+          done
+        fi
+
     - name: 构建应用程序 (macOS)
       if: matrix.platform == 'macos-latest'
       uses: tauri-apps/tauri-action@v0
@@ -86,6 +104,26 @@ jobs:
         includeDebug: false
         assetNamePattern: "*${{ matrix.os }}*"
         args: --target universal-apple-darwin
+
+    - name: 清理已有资产 (Windows)
+      if: matrix.platform == 'windows-latest'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo off
+        set TAG=app-v1.0.0
+        for /f "usebackq tokens=*" %%i in (`curl -s -H "Authorization: Bearer %GITHUB_TOKEN%" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases/tags/%TAG%`) do set JSON=%%i
+        
+        rem Windows shell json parsing is hard; skip if jq not available
+        where jq >nul 2>nul && (
+          echo %JSON% | jq -r '.assets[] | select(.name|test("windows")) | .id' > assets.txt
+          for /f %%A in (assets.txt) do (
+            echo Deleting asset id: %%A
+            curl -s -X DELETE -H "Authorization: Bearer %GITHUB_TOKEN%" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases/assets/%%A >nul
+          )
+        ) || (
+          echo jq not found; skip cleanup
+        )
 
     - name: 构建应用程序 (Windows)
       if: matrix.platform == 'windows-latest'
