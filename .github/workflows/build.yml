@@ -71,7 +71,8 @@ jobs:
         rustup target add x86_64-apple-darwin
         rustup target add aarch64-apple-darwin
         
-    - name: 构建应用程序
+    - name: 构建应用程序 (macOS)
+      if: matrix.platform == 'macos-latest'
       uses: tauri-apps/tauri-action@v0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -84,15 +85,21 @@ jobs:
         includeRelease: true
         includeDebug: false
         assetNamePattern: "*${{ matrix.os }}*"
-        tauriScript: |
-          if [ "${{ matrix.platform }}" = "macos-latest" ]; then
-            # 构建通用二进制文件
-            cargo tauri build --target universal-apple-darwin
-            # 移动构建产物到标准位置
-            mkdir -p src-tauri/target/release/bundle/macos
-            cp -r src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app src-tauri/target/release/bundle/macos/
-          else
-            cargo tauri build
-          fi
+        args: --target universal-apple-darwin
+
+    - name: 构建应用程序 (Windows)
+      if: matrix.platform == 'windows-latest'
+      uses: tauri-apps/tauri-action@v0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tagName: app-v1.0.0
+        releaseName: 'GAGA 客户端应用 v1.0.0 (${{ matrix.os }})'
+        releaseBody: '查看下方资源下载并安装此 ${{ matrix.os }} 版本。'
+        releaseDraft: true
+        prerelease: false
+        includeRelease: true
+        includeDebug: false
+        assetNamePattern: "*${{ matrix.os }}*"
         
     # 上传构建产物由 tauri-action 自动处理
