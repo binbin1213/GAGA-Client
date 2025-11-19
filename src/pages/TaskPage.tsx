@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { readSettings } from '../utils/settings';
-import { logInfo } from '../utils/logger';
 import { downieTheme } from '../styles/downie-theme';
 import { TaskCard } from '../components/TaskCard';
-import { Toolbar } from '../components/Toolbar';
+import { useDownload, type VideoInfo } from '../hooks/useDownload';
+
 import { DropZone } from '../components/DropZone';
 import { AppLayout } from '../components/layout/AppLayout';
 import { navigate } from '../utils/navigation';
@@ -16,21 +16,14 @@ interface TaskPageProps {
   authed: boolean;
 }
 
-interface VideoInfo {
-  Title: string;
-  MPD: string;
-  PSSH?: string;
-  LicenseURL?: string;
-  Keys?: string[]; // KID:KEY 格式的密钥数组
-  捕获时间: string;
-}
+
 
 export default function TaskPage({ authed }: TaskPageProps) {
   const [outputPath, setOutputPath] = useState<string>('');
-  const [progress, setProgress] = useState<number>(0);
-  const [currentTask, setCurrentTask] = useState<VideoInfo | null>(null);
-  const [status, setStatus] = useState<'pending' | 'downloading' | 'completed' | 'failed'>('pending');
-  const [error, setError] = useState<string>('');
+  const { status, progress, error, logs, currentTask, startDownload, cancelDownload, setError, phase, downloadSpeed } = useDownload();
+  const [showLogs, setShowLogs] = useState<boolean>(true);
+
+
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -40,21 +33,41 @@ export default function TaskPage({ authed }: TaskPageProps) {
           setOutputPath(settings.defaultDownloadDir);
         }
       } catch (err) {
-        logInfo('使用默认设置');
+        console.warn('使用默认设置');
       }
     };
 
     loadSettings();
   }, []);
 
+
+
+
+
   const handlePaste = async (text: string) => {
     try {
-      // 解析 JSON
-      const videoInfo: VideoInfo = JSON.parse(text);
+      let videoInfo: VideoInfo;
+
+      // 尝试解析为 JSON
+      if (text.trim().startsWith('{')) {
+        videoInfo = JSON.parse(text);
+      } else if (text.trim().startsWith('http')) {
+        // 直接 MPD 链接
+        const url = text.trim();
+        const title = new URL(url).pathname.split('/').pop() || 'video';
+        videoInfo = {
+          Title: title,
+          MPD: url,
+          捕获时间: new Date().toLocaleString('zh-CN'),
+        };
+      } else {
+        setError('格式不支持，请粘贴 JSON 或 MPD 链接');
+        return;
+      }
 
       // 验证必要字段
       if (!videoInfo.Title || !videoInfo.MPD) {
-        setError('JSON 格式不正确，缺少必要字段');
+        setError('缺少必要字段：Title 和 MPD');
         return;
       }
 
@@ -70,131 +83,16 @@ export default function TaskPage({ authed }: TaskPageProps) {
         return;
       }
 
-      // 设置当前任务
-      setCurrentTask(videoInfo);
-      setStatus('pending');
-      setError('');
-
-      // TODO: 这里应该弹出确认对话框
-      // 现在直接开始下载
-      await startDownload(videoInfo);
+      // 直接开始下载
+      await startDownload(videoInfo, outputPath);
     } catch (err) {
-      setError('JSON 解析失败，请检查格式');
+      setError('解析失败，请检查格式（JSON 或 MPD 链接）');
     }
   };
 
-  const startDownload = async (videoInfo: VideoInfo) => {
-    setStatus('downloading');
-    setProgress(0);
 
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      
-      // 构建下载参数
-      const args = [
-        videoInfo.MPD,
-        '--save-dir', outputPath,
-        '--save-name', videoInfo.Title,
-        '--thread-count', '16',
-        '--del-after-done',
-        '--auto-select',  // 自动选择最佳流，避免交互式提示
-        '--no-ansi-color',  // 禁用 ANSI 颜色代码
-        '--no-log',  // 禁用日志文件输出
-      ];
 
-      // 如果有 PSSH 和 LicenseURL，先获取解密密钥
-      if (videoInfo.PSSH && videoInfo.LicenseURL) {
-        logInfo(`检测到加密视频，正在获取解密密钥...`);
-        
-        try {
-          const { getKeys } = await import('../api');
-          const { getDeviceId } = await import('../utils/deviceId');
-          const { validateLocalAuth } = await import('../utils/auth');
-          
-          // 获取设备ID和授权信息
-          const deviceId = await getDeviceId();
-          const authState = await validateLocalAuth();
-          
-          if (!authState || !authState.licenseCode) {
-            throw new Error('未授权，无法获取解密密钥');
-          }
-          
-          // 调用 API 获取密钥
-          const keysResponse = await getKeys({
-            device_id: deviceId,
-            license_code: authState.licenseCode,
-            pssh: videoInfo.PSSH,
-            license_url: videoInfo.LicenseURL,
-          });
-          
-          if ((keysResponse.status === 'ok' || keysResponse.status === 'success') && keysResponse.keys && keysResponse.keys.length > 0) {
-            logInfo(`成功获取 ${keysResponse.keys.length} 个解密密钥`);
-            
-            // 添加解密密钥参数
-            keysResponse.keys.forEach(keyInfo => {
-              args.push('--key', `${keyInfo.kid}:${keyInfo.key}`);
-              logInfo(`添加密钥: ${keyInfo.kid}:${keyInfo.key.substring(0, 8)}...`);
-            });
-          } else {
-            throw new Error(keysResponse.message || '获取解密密钥失败');
-          }
-        } catch (keyError: any) {
-          logInfo(`获取密钥失败: ${keyError.message || keyError}`);
-          setError(`获取解密密钥失败: ${keyError.message || keyError}`);
-          setStatus('failed');
-          return;
-        }
-      }
 
-      logInfo(`开始下载: ${videoInfo.Title}`);
-      logInfo(`参数: ${JSON.stringify(args)}`);
-
-      // 调用下载命令
-      const result = await invoke<string>('exec_download_command', {
-        command: 'N_m3u8DL-RE',
-        args: args,
-      });
-
-      logInfo(`下载完成: ${result}`);
-      setStatus('completed');
-      setProgress(100);
-
-      // 保存到历史记录
-      const { addDownloadRecord } = await import('../utils/history');
-      await addDownloadRecord({
-        title: videoInfo.Title,
-        mpdUrl: videoInfo.MPD,
-        status: 'completed',
-        progress: 100,
-        completedAt: new Date().toISOString(),
-        files: [`${outputPath}/${videoInfo.Title}.mp4`],
-      });
-    } catch (err: any) {
-      logInfo(`下载失败: ${err}`);
-      setError(`下载失败: ${err}`);
-      setStatus('failed');
-
-      // 保存失败记录
-      try {
-        const { addDownloadRecord } = await import('../utils/history');
-        await addDownloadRecord({
-          title: videoInfo.Title,
-          mpdUrl: videoInfo.MPD,
-          status: 'failed',
-          progress: 0,
-          errorMessage: String(err),
-        });
-      } catch (historyErr) {
-        logInfo(`保存历史记录失败: ${historyErr}`);
-      }
-    }
-  };
-
-  const handleCancelDownload = () => {
-    setStatus('pending');
-    setCurrentTask(null);
-    setProgress(0);
-  };
 
   const handleShowInFinder = () => {
     // TODO: 在 Finder 中显示文件
@@ -211,11 +109,13 @@ export default function TaskPage({ authed }: TaskPageProps) {
     }
   };
 
-  const handleNavigate = (target: 'tasks' | 'history' | 'settings') => {
-    const routeMap: Record<'tasks' | 'history' | 'settings', '/' | '/history' | '/settings'> = {
+  const handleNavigate = (target: 'tasks' | 'history' | 'settings' | 'logs') => {
+    if (target === 'tasks') return;
+    const routeMap: Record<'tasks' | 'history' | 'settings' | 'logs', '/' | '/history' | '/settings' | '/logs'> = {
       tasks: '/',
       history: '/history',
       settings: '/settings',
+      logs: '/logs',
     };
     navigate(routeMap[target]);
   };
@@ -288,10 +188,89 @@ export default function TaskPage({ authed }: TaskPageProps) {
               title={currentTask.Title}
               progress={progress}
               status={status}
+              phase={phase}
+              speed={downloadSpeed}
               fileInfo="MP4 - 1920×1080"
-              onClose={handleCancelDownload}
+              onClose={cancelDownload}
               onShowInFinder={status === 'completed' ? handleShowInFinder : undefined}
             />
+            
+            {/* 日志显示面板 */}
+            {logs.length > 0 && (
+              <div
+                style={{
+                  marginTop: downieTheme.spacing.lg,
+                  width: '100%',
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  border: `1px solid ${downieTheme.colors.border.light}`,
+                  borderRadius: downieTheme.radius.card,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: `${downieTheme.spacing.sm} ${downieTheme.spacing.md}`,
+                    background: 'rgba(0, 0, 0, 0.03)',
+                    borderBottom: `1px solid ${downieTheme.colors.border.light}`,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setShowLogs(!showLogs)}
+                >
+                  <span style={{ 
+                    fontSize: '13px', 
+                    fontWeight: 600, 
+                    color: downieTheme.colors.text.primary 
+                  }}>
+                    详细日志 ({logs.length} 条)
+                  </span>
+                  <span style={{ 
+                    fontSize: '12px', 
+                    color: downieTheme.colors.text.secondary 
+                  }}>
+                    {showLogs ? '▼' : '▶'}
+                  </span>
+                </div>
+                {showLogs && (
+                  <div
+                    style={{
+                      maxHeight: '400px',
+                      padding: downieTheme.spacing.md,
+                      overflowY: 'auto',
+                      fontFamily: downieTheme.fonts.mono,
+                      fontSize: '11px',
+                      lineHeight: 1.8,
+                    }}
+                  >
+                    {logs.map((log, index) => {
+                      const color =
+                        log.level === 'ERROR'
+                          ? '#ff3b30'
+                          : log.level === 'WARN'
+                          ? '#ff9500'
+                          : log.level === 'INFO'
+                          ? downieTheme.colors.text.secondary
+                          : downieTheme.colors.text.tertiary;
+
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            color,
+                            marginBottom: '2px',
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          {`[${new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}] ${log.message}`}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <DropZone onPaste={handlePaste} />
@@ -325,13 +304,7 @@ export default function TaskPage({ authed }: TaskPageProps) {
         )}
       </div>
 
-      {/* 底部工具栏 */}
-      <Toolbar
-        taskCount={currentTask ? 1 : 0}
-        onAddTask={() => {
-          // TODO: 打开添加任务对话框
-        }}
-      />
+
       </div>
     </AppLayout>
   );

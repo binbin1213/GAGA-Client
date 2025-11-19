@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import { readHistory } from '../utils/history';
+import { readHistory, clearHistory } from '../utils/history';
 import type { DownloadRecord } from '../types/history';
 import { AppLayout } from '../components/layout/AppLayout';
 import { navigate } from '../utils/navigation';
+import { confirm } from '@tauri-apps/plugin-dialog';
 
 const baseFontFamily = "'SF Pro Display', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
@@ -108,6 +109,25 @@ const actionButtonStyle: CSSProperties = {
   transition: 'background 0.2s ease, transform 0.1s ease',
 };
 
+const headerStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
+const clearButtonStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  padding: '4px 8px',
+  fontSize: '12px',
+  color: 'rgba(60,60,67,0.6)',
+  cursor: 'pointer',
+  borderRadius: '6px',
+  transition: 'background 0.2s ease',
+};
+
+
+
 function ActionButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -157,18 +177,35 @@ export default function HistoryPage() {
     }
   };
 
-  const handleNavigate = (target: 'tasks' | 'history' | 'settings') => {
+  const handleNavigate = (target: 'tasks' | 'history' | 'settings' | 'logs') => {
     if (target === 'history') return;
-    const routeMap: Record<'tasks' | 'history' | 'settings', '/' | '/history' | '/settings'> = {
+    const routeMap: Record<'tasks' | 'history' | 'settings' | 'logs', '/' | '/history' | '/settings' | '/logs'> = {
       tasks: '/',
       history: '/history',
       settings: '/settings',
+      logs: '/logs',
     };
     navigate(routeMap[target]);
   };
 
   const handleShowInFinder = (filePath: string) => {
     console.log('在 Finder 中显示:', filePath);
+  };
+
+  const handleClearHistory = async () => {
+    const confirmed = await confirm('确定要清除所有历史记录吗？此操作不可撤销。', {
+      title: '确认清除',
+      okLabel: '确认',
+      cancelLabel: '取消',
+    });
+    if (confirmed) {
+      try {
+        await clearHistory();
+        await loadHistory(); // 重新加载历史记录
+      } catch (error) {
+        console.error('清除历史记录失败:', error);
+      }
+    }
   };
 
   const renderItem = (item: DownloadRecord, index: number) => {
@@ -202,7 +239,19 @@ export default function HistoryPage() {
     <AppLayout active="history" onNavigate={handleNavigate}>
       <div style={pageContainerStyle}>
         <div style={sectionWrapperStyle}>
-          <p style={sectionTitleStyle}>任务记录</p>
+          <div style={headerStyle}>
+            <p style={sectionTitleStyle}>任务记录</p>
+            {history.length > 0 && (
+              <button 
+                style={clearButtonStyle}
+                onClick={handleClearHistory}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.05)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+              >
+                清除记录
+              </button>
+            )}
+          </div>
           <div style={listCardStyle}>
             {history.length === 0 ? (
               <div

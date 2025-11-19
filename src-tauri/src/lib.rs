@@ -3,10 +3,14 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use sha2::{Sha256, Digest};
 use tauri::{Manager, Emitter, menu::{MenuBuilder, MenuItemBuilder}, tray::{TrayIconBuilder, TrayIconEvent}};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+// 引入工具模块
+mod utils;
+mod logger;
 
 // ==================== 数据结构定义 ====================
 
@@ -18,6 +22,17 @@ struct LogEvent {
     progress: Option<f64>,
     speed: Option<String>,
     timestamp: String,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SubtitleStyle {
+    fontsize: Option<u32>,
+    primary_colour: Option<String>,
+    outline: Option<f32>,
+    outline_colour: Option<String>,
+    shadow: Option<f32>,
+    back_colour: Option<String>,
 }
 
 /// N_m3u8DL-RE 允许的参数白名单
@@ -128,7 +143,7 @@ fn validate_tool_path(path: &Path) -> bool {
 // ==================== 日志解析函数 ====================
 
 /// 解析 N_m3u8DL-RE 日志行
-fn parse_n_m3u8dl_log_line(line: &str) -> Option<LogEvent> {
+fn parse_n_m3u8dl_log_line(line: &str, last_progress: &Arc<Mutex<i32>>) -> Option<LogEvent> {
     let timestamp = chrono::Utc::now().to_rfc3339();
     let trimmed = line.trim();
     
@@ -173,16 +188,22 @@ fn parse_n_m3u8dl_log_line(line: &str) -> Option<LogEvent> {
     // 解析视频流进度（Vid 1920x1080 | 4300 Kbps）
     if trimmed.starts_with("Vid ") && trimmed.contains("%") {
         if let Some(progress) = extract_progress_from_line(trimmed) {
-            // 只在进度有明显变化时发送（每 10% 发送一次，减少日志）
-            if progress >= 100.0 || (progress % 10.0) < 1.0 {
-                let speed = extract_speed_from_line(trimmed);
-                return Some(LogEvent {
-                    level: "INFO".to_string(),
-                    message: format!("下载进度: {:.0}%", progress),
-                    progress: Some(progress),
-                    speed: if !speed.is_empty() { Some(speed) } else { None },
-                    timestamp,
-                });
+            // 为了减少日志频率，我们只在进度跨越 5% 边界或达到 100% 时记录日志
+            let progress_int = progress.floor() as i32;
+            let mut last_progress_guard = last_progress.lock().unwrap();
+
+            if progress_int > *last_progress_guard {
+                if (progress_int / 5 > *last_progress_guard / 5) || progress_int == 100 {
+                    *last_progress_guard = progress_int;
+                    let speed = extract_speed_from_line(trimmed);
+                    return Some(LogEvent {
+                        level: "INFO".to_string(),
+                        message: format!("下载进度: {:.0}%", progress),
+                        progress: Some(progress),
+                        speed: if !speed.is_empty() { Some(speed) } else { None },
+                        timestamp,
+                    });
+                }
             }
         }
         return None;
@@ -210,7 +231,7 @@ fn parse_n_m3u8dl_log_line(line: &str) -> Option<LogEvent> {
             return Some(LogEvent {
                 level: "INFO".to_string(),
                 message: "正在合并文件...".to_string(),
-                progress: Some(100.0),
+                progress: None,
                 speed: None,
                 timestamp,
             });
@@ -285,9 +306,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_log::Builder::new()
+            .level(log::LevelFilter::Info)
+            .build())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
+            
+            // 初始化日志系统
+            if let Ok(app_data_dir) = app.path().app_data_dir() {
+                // println!("[Debug] App Data Directory: {:?}", app_data_dir);
+                if let Err(e) = logger::init_log_file(app_data_dir) {
+                    eprintln!("初始化日志系统失败: {}", e);
+                }
+            }
             
             // 设置窗口图标和标题
             window.set_title("GAGA Client").unwrap();
@@ -341,13 +372,20 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_tool_path,
             exec_download_command,
+            exec_ffmpeg_command,
             exec_merge_command,
             check_tool_available,
-            get_tool_path,
             get_system_info,
             hash_string,
-            burn_subtitle
+            burn_subtitle,
+            utils::get_temp_dir,
+            utils::get_downloads_dir,
+            utils::create_dir,
+            list_log_files,
+            read_log_file,
+            cleanup_old_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -412,6 +450,7 @@ async fn exec_download_command(
   window: tauri::Window,
   _command: String,
   args: Vec<String>,
+  working_dir: Option<String>,
 ) -> Result<String, String> {
   // 参数验证
   if args.is_empty() {
@@ -434,17 +473,31 @@ async fn exec_download_command(
   // 日志：打印命令和参数
   log::info!("执行命令: {}", tool_path_str);
   log::info!("参数数量: {}", args.len());
+  
+  // 写入日志文件
+  let _ = logger::write_tool_log("N_m3u8DL-RE", "INFO", 
+      &format!("开始执行下载命令，参数数量: {}", args.len()));
+  
   for (i, arg) in args.iter().enumerate() {
     if arg.starts_with("--key") && i + 1 < args.len() {
       log::debug!("密钥参数: {} [已隐藏]", arg);
     } else {
       log::debug!("参数[{}]: {}", i, arg);
+      let _ = logger::write_tool_log("N_m3u8DL-RE", "DEBUG", 
+          &format!("参数[{}]: {}", i, arg));
     }
   }
 
+  let last_progress = Arc::new(Mutex::new(-1));
+  let last_message = Arc::new(Mutex::new(String::new()));
   let window_clone = window.clone();
+  let working_dir_clone = working_dir.clone();
   let (output, stderr_output, status) = tokio::task::spawn_blocking(move || {
     let mut cmd = Command::new(&tool_path_str);
+    
+    if let Some(dir) = working_dir_clone {
+      cmd.current_dir(dir);
+    }
 
     // 添加参数
     for arg in args {
@@ -466,14 +519,21 @@ async fn exec_download_command(
 
     // 在后台线程中读取输出，避免阻塞，并实时发送日志事件
     let window_for_stdout = window_clone.clone();
+    let last_progress_stdout = Arc::clone(&last_progress);
+    let last_message_stdout = Arc::clone(&last_message);
     let stdout_handle = std::thread::spawn(move || {
       let reader = BufReader::new(stdout);
       let mut output = String::new();
       for line in reader.lines() {
         if let Ok(line) = line {
-          // 解析并发送日志事件
-          if let Some(log_event) = parse_n_m3u8dl_log_line(&line) {
-            let _ = window_for_stdout.emit("n-m3u8dl-log", log_event);
+          if let Some(log_event) = parse_n_m3u8dl_log_line(&line, &last_progress_stdout) {
+            let key = format!("{}:{:?}", log_event.message, log_event.progress);
+            let mut lm = last_message_stdout.lock().unwrap();
+            if *lm != key {
+              *lm = key.clone();
+              let _ = logger::write_tool_log("N_m3u8DL-RE", &log_event.level, &log_event.message);
+              let _ = window_for_stdout.emit("n-m3u8dl-log", log_event);
+            }
           }
           output.push_str(&line);
           output.push('\n');
@@ -483,15 +543,22 @@ async fn exec_download_command(
     });
 
     let window_for_stderr = window_clone.clone();
+    let last_progress_stderr = Arc::clone(&last_progress);
+    let last_message_stderr = Arc::clone(&last_message);
     let stderr_handle = if let Some(stderr) = stderr {
       Some(std::thread::spawn(move || {
         let reader = BufReader::new(stderr);
         let mut stderr_output = String::new();
         for line in reader.lines() {
           if let Ok(line) = line {
-            // 解析并发送日志事件（stderr 通常包含进度信息）
-            if let Some(log_event) = parse_n_m3u8dl_log_line(&line) {
-              let _ = window_for_stderr.emit("n-m3u8dl-log", log_event);
+            if let Some(log_event) = parse_n_m3u8dl_log_line(&line, &last_progress_stderr) {
+              let key = format!("{}:{:?}", log_event.message, log_event.progress);
+              let mut lm = last_message_stderr.lock().unwrap();
+              if *lm != key {
+                *lm = key.clone();
+                let _ = logger::write_tool_log("N_m3u8DL-RE", &log_event.level, &log_event.message);
+                let _ = window_for_stderr.emit("n-m3u8dl-log", log_event);
+              }
             }
             stderr_output.push_str(&line);
             stderr_output.push('\n');
@@ -527,10 +594,13 @@ async fn exec_download_command(
   match status.code() {
     Some(code) if code == 0 => {
       log::info!("命令执行成功");
+      let _ = logger::write_tool_log("N_m3u8DL-RE", "INFO", "下载任务执行成功");
       Ok(output)
     },
     Some(code) => {
       log::error!("命令执行失败，退出码: {}", code);
+      let _ = logger::write_tool_log("N_m3u8DL-RE", "ERROR", 
+          &format!("下载任务执行失败，退出码: {}", code));
       Err(format!("命令执行失败，退出码: {}\n标准输出: {}\n错误输出: {}",
         code, output, stderr_output))
     },
@@ -539,9 +609,11 @@ async fn exec_download_command(
       // 但可能下载已经完成，检查输出中是否有成功信息
       if output.contains("完成") || output.contains("100%") || output.contains("Done") {
         log::info!("命令执行完成（无退出码）");
+        let _ = logger::write_tool_log("N_m3u8DL-RE", "INFO", "下载任务执行完成（无退出码）");
         Ok(output)
       } else {
         log::error!("命令被中断");
+        let _ = logger::write_tool_log("N_m3u8DL-RE", "ERROR", "下载任务被中断");
         Err(format!("命令被中断（可能是超时或被终止）\n标准输出: {}\n错误输出: {}",
           output, stderr_output))
       }
@@ -571,8 +643,15 @@ async fn exec_merge_command(
   // 日志：打印命令和参数
   log::info!("执行 ffmpeg 命令: {}", tool_path_str);
   log::info!("参数数量: {}", args.len());
+  
+  // 写入日志文件
+  let _ = logger::write_tool_log("ffmpeg", "INFO", 
+      &format!("开始执行混流命令，参数数量: {}", args.len()));
+  
   for (i, arg) in args.iter().enumerate() {
     log::debug!("参数[{}]: {}", i, arg);
+    let _ = logger::write_tool_log("ffmpeg", "DEBUG", 
+        &format!("参数[{}]: {}", i, arg));
   }
 
   let (output, stderr_output, status) = tokio::task::spawn_blocking(move || {
@@ -599,6 +678,8 @@ async fn exec_merge_command(
         if let Ok(line) = line {
           // 使用结构化日志
           log::debug!("ffmpeg stdout: {}", line);
+          // 写入日志文件
+          let _ = logger::write_tool_log("ffmpeg", "INFO", &line);
           output.push_str(&line);
           output.push('\n');
         }
@@ -614,6 +695,8 @@ async fn exec_merge_command(
           if let Ok(line) = line {
             // 使用结构化日志
             log::debug!("ffmpeg stderr: {}", line);
+            // 写入日志文件（ffmpeg 的进度信息在 stderr）
+            let _ = logger::write_tool_log("ffmpeg", "INFO", &line);
             stderr_output.push_str(&line);
             stderr_output.push('\n');
           }
@@ -636,12 +719,20 @@ async fn exec_merge_command(
 
   if status.success() {
     log::info!("ffmpeg 命令执行成功");
+    let _ = logger::write_tool_log("ffmpeg", "INFO", "混流命令执行成功");
     Ok(output)
   } else {
     log::error!("ffmpeg 命令执行失败，退出码: {:?}", status.code());
+    let _ = logger::write_tool_log("ffmpeg", "ERROR", 
+        &format!("混流命令执行失败，退出码: {:?}", status.code()));
     Err(format!("命令执行失败，退出码: {:?}\n标准输出: {}\n错误输出: {}",
       status.code(), output, stderr_output))
   }
+}
+
+#[tauri::command]
+async fn exec_ffmpeg_command(args: Vec<String>) -> Result<String, String> {
+  exec_merge_command("ffmpeg".to_string(), args).await
 }
 
 /// 检查工具是否可用
@@ -774,6 +865,7 @@ async fn burn_subtitle(
   video_path: String,
   subtitle_path: String,
   output_path: String,
+  style: Option<SubtitleStyle>,
 ) -> Result<String, String> {
   log::info!("开始烧录字幕");
   log::info!("视频路径: {}", video_path);
@@ -788,16 +880,46 @@ async fn burn_subtitle(
   // 检测硬件加速编码器
   let encoder = detect_hardware_encoder();
   log::info!("使用编码器: {}", encoder);
+  // 通知前端编码器选择
+  let _ = window.emit("burn-subtitle-status", LogEvent {
+    level: "INFO".to_string(),
+    message: format!(
+      "字幕烧录开始，编码器: {}{}",
+      encoder,
+      if encoder != "libx264" { "（硬件）" } else { "（软件）" }
+    ),
+    progress: None,
+    speed: None,
+    timestamp: chrono::Utc::now().to_rfc3339(),
+  });
   
   // 获取 ffmpeg 路径
   let ffmpeg_path = get_tool_path_internal("ffmpeg");
   
   // 构建 ffmpeg 命令
   // 字幕文件路径需要转义（Windows 路径中的反斜杠）
+  let style_merged = {
+    let s = style.clone().unwrap_or(SubtitleStyle {
+      fontsize: Some(72),
+      primary_colour: Some("&H00FFFFFF".to_string()),
+      outline: Some(2.0),
+      outline_colour: Some("&H00000000".to_string()),
+      shadow: Some(3.0),
+      back_colour: Some("&H60000000".to_string()),
+    });
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(v) = s.fontsize { parts.push(format!("Fontsize={}", v)); }
+    if let Some(v) = s.primary_colour { parts.push(format!("PrimaryColour={}", v)); }
+    if let Some(v) = s.outline { parts.push(format!("Outline={}", v)); }
+    if let Some(v) = s.outline_colour { parts.push(format!("OutlineColour={}", v)); }
+    if let Some(v) = s.shadow { parts.push(format!("Shadow={}", v)); }
+    if let Some(v) = s.back_colour { parts.push(format!("BackColour={}", v)); }
+    parts.join(",")
+  };
   let subtitle_filter = if cfg!(target_os = "windows") {
-    format!("subtitles='{}'", subtitle_path.replace("\\", "\\\\").replace(":", "\\:"))
+    format!("subtitles='{}':force_style='{}'", subtitle_path.replace("\\", "\\\\").replace(":", "\\:"), style_merged)
   } else {
-    format!("subtitles='{}'", subtitle_path.replace("'", "\\'"))
+    format!("subtitles='{}':force_style='{}'", subtitle_path.replace("'", "\\'"), style_merged)
   };
   
   let mut args = vec![
@@ -814,7 +936,7 @@ async fn burn_subtitle(
     // macOS VideoToolbox 参数
     args.extend(vec![
       "-b:v".to_string(),
-      "5M".to_string(),  // 5Mbps 码率
+      "4M".to_string(),  // 4Mbps 码率
       "-maxrate".to_string(),
       "8M".to_string(),
       "-bufsize".to_string(),
@@ -826,7 +948,7 @@ async fn burn_subtitle(
       "-preset".to_string(),
       "p4".to_string(),  // 平衡质量和速度
       "-b:v".to_string(),
-      "5M".to_string(),
+      "4M".to_string(),
     ]);
   } else if encoder == "h264_qsv" {
     // Intel QSV 参数
@@ -834,7 +956,7 @@ async fn burn_subtitle(
       "-preset".to_string(),
       "medium".to_string(),
       "-b:v".to_string(),
-      "5M".to_string(),
+      "4M".to_string(),
     ]);
   } else {
     // 软件编码参数
@@ -915,9 +1037,163 @@ async fn burn_subtitle(
   
   if status.success() {
     log::info!("字幕烧录成功");
+    let _ = window.emit("burn-subtitle-status", LogEvent {
+      level: "INFO".to_string(),
+      message: format!("字幕烧录成功（编码器: {}）", encoder),
+      progress: None,
+      speed: None,
+      timestamp: chrono::Utc::now().to_rfc3339(),
+    });
     Ok(format!("字幕烧录完成: {}", output_path))
   } else {
     log::error!("字幕烧录失败，退出码: {:?}", status.code());
-    Err(format!("字幕烧录失败\n标准输出: {}\n错误输出: {}", output, stderr_output))
+    // 如果是硬件编码器，尝试回退到软件编码
+    if encoder != "libx264" {
+      let _ = window.emit("burn-subtitle-status", LogEvent {
+        level: "WARN".to_string(),
+        message: format!("硬件编码失败，回退到软件编码 libx264"),
+        progress: None,
+        speed: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+      });
+
+      // 重新构建软件编码参数
+      let ffmpeg_path_fb = get_tool_path_internal("ffmpeg");
+      let subtitle_filter_fb = if cfg!(target_os = "windows") {
+        format!("subtitles='{}'", subtitle_path.replace("\\", "\\\\").replace(":", "\\:"))
+      } else {
+        format!("subtitles='{}'", subtitle_path.replace("'", "\\'"))
+      };
+      let args_fb = vec![
+        "-i".to_string(),
+        video_path.clone(),
+        "-vf".to_string(),
+        subtitle_filter_fb,
+        "-c:v".to_string(),
+        "libx264".to_string(),
+        "-preset".to_string(),
+        "medium".to_string(),
+        "-crf".to_string(),
+        "23".to_string(),
+        "-c:a".to_string(),
+        "copy".to_string(),
+        "-y".to_string(),
+        output_path.clone(),
+      ];
+
+      let window_clone_fb = window.clone();
+      let (output_fb, stderr_output_fb, status_fb) = tokio::task::spawn_blocking(move || {
+        let mut cmd = Command::new(&ffmpeg_path_fb);
+        cmd.args(&args_fb);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(|e| {
+          format!("执行 ffmpeg 失败（回退）: {}", e)
+        })?;
+
+        let stdout = child.stdout.take().ok_or("无法获取标准输出")?;
+        let stderr = child.stderr.take();
+
+        let stdout_handle = std::thread::spawn(move || {
+          let reader = BufReader::new(stdout);
+          let mut output = String::new();
+          for line in reader.lines() {
+            if let Ok(line) = line {
+              output.push_str(&line);
+              output.push('\n');
+            }
+          }
+          output
+        });
+
+        let window_for_stderr = window_clone_fb.clone();
+        let stderr_handle = if let Some(stderr) = stderr {
+          Some(std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            let mut stderr_output = String::new();
+            for line in reader.lines() {
+              if let Ok(line) = line {
+                if line.contains("time=") {
+                  let _ = window_for_stderr.emit("burn-subtitle-progress", line.clone());
+                }
+                stderr_output.push_str(&line);
+                stderr_output.push('\n');
+              }
+            }
+            stderr_output
+          }))
+        } else {
+          None
+        };
+
+        let status = child.wait().map_err(|e| format!("等待命令完成失败: {}", e))?;
+        let output = stdout_handle.join().map_err(|_| "读取标准输出失败")?;
+        let stderr_output = stderr_handle.map(|h| h.join().unwrap_or_default()).unwrap_or_default();
+
+        Ok::<(String, String, std::process::ExitStatus), String>((output, stderr_output, status))
+      }).await.map_err(|e| format!("执行任务失败（回退）: {}", e))??;
+
+      if status_fb.success() {
+        let _ = window.emit("burn-subtitle-status", LogEvent {
+          level: "INFO".to_string(),
+          message: "字幕烧录成功（已回退到软件编码 libx264）".to_string(),
+          progress: None,
+          speed: None,
+          timestamp: chrono::Utc::now().to_rfc3339(),
+        });
+        return Ok(format!("字幕烧录完成: {}", output_path));
+      } else {
+        let _ = window.emit("burn-subtitle-status", LogEvent {
+          level: "ERROR".to_string(),
+          message: "字幕烧录失败（硬件与回退均失败）".to_string(),
+          progress: None,
+          speed: None,
+          timestamp: chrono::Utc::now().to_rfc3339(),
+        });
+        return Err(format!(
+          "字幕烧录失败（硬件与回退均失败）\n标准输出: {}\n错误输出: {}\n回退标准输出: {}\n回退错误输出: {}",
+          output, stderr_output, output_fb, stderr_output_fb
+        ));
+      }
+    } else {
+      let _ = window.emit("burn-subtitle-status", LogEvent {
+        level: "ERROR".to_string(),
+        message: "字幕烧录失败".to_string(),
+        progress: None,
+        speed: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+      });
+      Err(format!("字幕烧录失败\n标准输出: {}\n错误输出: {}", output, stderr_output))
+    }
   }
+}
+
+// ==================== 日志管理命令 ====================
+
+/// 列出所有日志文件
+#[tauri::command]
+async fn list_log_files(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+    
+    let log_files = logger::list_log_files(app_data_dir)?;
+    Ok(log_files.iter()
+        .filter_map(|p| p.to_str().map(|s| s.to_string()))
+        .collect())
+}
+
+/// 读取日志文件内容
+#[tauri::command]
+async fn read_log_file(file_path: String, max_lines: Option<usize>) -> Result<String, String> {
+    logger::read_log_file(PathBuf::from(file_path), max_lines)
+}
+
+/// 清理旧日志文件
+#[tauri::command]
+async fn cleanup_old_logs(app: tauri::AppHandle, keep_days: u32) -> Result<usize, String> {
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+    
+    logger::cleanup_old_logs(app_data_dir, keep_days)
 }

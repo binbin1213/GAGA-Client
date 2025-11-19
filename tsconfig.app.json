@@ -22,7 +22,16 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "@tauri-apps/api/*": ["./node_modules/@tauri-apps/api/dist-js/*"]
+    }
   },
   "include": ["src"]
+  ,
+  "exclude": [
+    "src/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
 }

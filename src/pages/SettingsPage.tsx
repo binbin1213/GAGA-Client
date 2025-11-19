@@ -8,6 +8,7 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { navigate } from '../utils/navigation';
 import { MacCard } from '../components/ui/MacCard';
 
+
 interface SettingsPageProps {
   authed: boolean;
   deviceId: string;
@@ -133,12 +134,13 @@ export default function SettingsPage({ authed, deviceId }: SettingsPageProps) {
     await openWindow('auth');
   };
 
-  const handleNavigate = (target: 'tasks' | 'history' | 'settings') => {
+  const handleNavigate = (target: 'tasks' | 'history' | 'settings' | 'logs') => {
     if (target === 'settings') return;
-    const routeMap: Record<'tasks' | 'history' | 'settings', '/' | '/history' | '/settings'> = {
+    const routeMap: Record<'tasks' | 'history' | 'settings' | 'logs', '/' | '/history' | '/settings' | '/logs'> = {
       tasks: '/',
       history: '/history',
       settings: '/settings',
+      logs: '/logs',
     };
     navigate(routeMap[target]);
   };
@@ -208,6 +210,8 @@ export default function SettingsPage({ authed, deviceId }: SettingsPageProps) {
             </StyledButton>
           </SettingRow>
         </MacCard>
+
+
 
       </div>
     </AppLayout>

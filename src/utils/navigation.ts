@@ -1,4 +1,4 @@
-type AppRoute = '/' | '/history' | '/settings';
+type AppRoute = '/' | '/history' | '/settings' | '/logs';
 
 const NAVIGATE_EVENT = 'app:navigate';
 

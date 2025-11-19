@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import TaskPage from './pages/TaskPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import LogPage from './pages/LogPage';
 import AuthPage from './pages/AuthPage';
 import { getDeviceId } from './utils/deviceId';
 import { validateLocalAuth, clearAuthState } from './utils/auth';
@@ -146,6 +147,8 @@ function App() {
       return <HistoryPage />;
     case '/settings':
       return <SettingsPage deviceId={deviceId} authed={authed} />;
+    case '/logs':
+      return <LogPage />;
     case '/auth':
       return (
         <AuthPage

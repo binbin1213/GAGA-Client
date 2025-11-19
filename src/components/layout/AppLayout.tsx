@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { downieTheme } from '../../styles/downie-theme';
 
-type AppRouteKey = 'tasks' | 'history' | 'settings';
+type AppRouteKey = 'tasks' | 'history' | 'settings' | 'logs';
 
 export interface AppLayoutProps {
   active: AppRouteKey;
@@ -22,6 +22,10 @@ const itemMeta: Record<AppRouteKey, { label: string; icon: string }> = {
     label: '应用设置',
     icon: '⚙️',
   },
+  logs: {
+    label: '日志管理',
+    icon: '📄',
+  },
 };
 
 export function AppLayout({ active, onNavigate, children }: AppLayoutProps) {
@@ -40,7 +44,7 @@ export function AppLayout({ active, onNavigate, children }: AppLayoutProps) {
     display: 'flex',
     flexDirection: 'column',
     gap: 22,
-    background: 'rgba(255,255,255,0.46)',
+    background: 'transparent',
     backdropFilter: 'blur(28px)',
     WebkitBackdropFilter: 'blur(28px)',
     borderRight: '1px solid rgba(0,0,0,0.08)',

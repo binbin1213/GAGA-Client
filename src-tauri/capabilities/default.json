@@ -9,16 +9,7 @@
     "auth"
   ],
   "permissions": [
-    "http:default",
-    "http:allow-fetch",
-    {
-      "identifier": "http:default",
-      "allow": [
-        {
-          "url": "https://gaga.binbino.cn:88/*"
-        }
-      ]
-    },
+
     "core:webview:allow-create-webview",
     "core:webview:allow-create-webview-window",
     "core:window:allow-create",
@@ -69,6 +60,14 @@
     "fs:scope-home-recursive",
     "core:path:default",
     "shell:allow-execute",
-    "shell:allow-open"
+    "shell:allow-open",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://gaga.binbino.cn:88"
+        }
+      ]
+    }
   ]
 }

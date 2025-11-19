@@ -1,11 +1,14 @@
 import type { CSSProperties } from 'react';
 import { downieTheme } from '../styles/downie-theme';
+import type { DownloadPhase } from '../hooks/useDownload';
 
 interface TaskCardProps {
   title: string;
   source?: string;
   progress: number;
   status: 'pending' | 'downloading' | 'completed' | 'failed';
+  phase?: DownloadPhase;
+  speed?: string;
   fileInfo?: string;
   onClose?: () => void;
   onShowInFinder?: () => void;
@@ -16,6 +19,8 @@ export function TaskCard({
   source = 'gagaoolala.com',
   progress,
   status,
+  phase,
+  speed,
   fileInfo,
   onClose,
   onShowInFinder,
@@ -159,6 +164,25 @@ export function TaskCard({
     }
   };
 
+  const getPhaseText = () => {
+    switch (phase) {
+      case 'decrypting':
+        return '正在解密';
+      case 'merging':
+        return '正在合并';
+      case 'burning':
+        return '字幕烧录中';
+      case 'completed':
+        return '下载完成';
+      case 'failed':
+        return '下载失败';
+      case 'downloading':
+        return `正在下载 ${progress}%`;
+      default:
+        return undefined;
+    }
+  };
+
   return (
     <div style={cardStyle}>
       {/* 缩略图 */}
@@ -176,13 +200,13 @@ export function TaskCard({
               <div style={progressBarStyle} />
             </div>
             <div style={infoRowStyle}>
-              <div style={infoStyle}>{getStatusText()}</div>
+              <div style={infoStyle}>{[getPhaseText() || getStatusText(), speed].filter(Boolean).join(' · ')}</div>
               {fileInfo && <div style={infoStyle}>{fileInfo}</div>}
             </div>
           </>
         ) : (
           <div style={infoRowStyle}>
-            <div style={infoStyle}>{getStatusText()}</div>
+            <div style={infoStyle}>{getPhaseText() || getStatusText()}</div>
             {fileInfo && <div style={infoStyle}>{fileInfo}</div>}
           </div>
         )}
