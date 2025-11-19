@@ -81,7 +81,9 @@ jobs:
         releaseBody: '查看下方资源下载并安装此 ${{ matrix.os }} 版本。'
         releaseDraft: true
         prerelease: false
-        include: "*${{ matrix.os }}*"
+        includeRelease: true
+        includeDebug: false
+        assetNamePattern: "*${{ matrix.os }}*"
         tauriScript: |
           if [ "${{ matrix.platform }}" = "macos-latest" ]; then
             # 构建通用二进制文件
