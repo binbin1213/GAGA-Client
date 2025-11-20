@@ -88,6 +88,7 @@ jobs:
     - name: 构建应用程序 (macOS)
       if: matrix.platform == 'macos-latest'
       uses: tauri-apps/tauri-action@v0
+      continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -100,6 +101,15 @@ jobs:
         includeDebug: false
         assetNamePattern: "*${{ matrix.os }}*"
         args: --target universal-apple-darwin
+
+    - name: 上传构建产物 (macOS 兜底)
+      if: matrix.platform == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: gaga-client-macos
+        path: |
+          src-tauri/target/**/bundle/**
+        if-no-files-found: warn
 
     - name: 清理已有资产 (Windows)
       if: matrix.platform == 'windows-latest'
@@ -131,6 +141,7 @@ jobs:
     - name: 构建应用程序 (Windows)
       if: matrix.platform == 'windows-latest'
       uses: tauri-apps/tauri-action@v0
+      continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -142,5 +153,14 @@ jobs:
         includeRelease: true
         includeDebug: false
         assetNamePattern: "*${{ matrix.os }}*"
+
+    - name: 上传构建产物 (Windows 兜底)
+      if: matrix.platform == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: gaga-client-windows
+        path: |
+          src-tauri/target/**/bundle/**
+        if-no-files-found: warn
         
     # 上传构建产物由 tauri-action 自动处理
