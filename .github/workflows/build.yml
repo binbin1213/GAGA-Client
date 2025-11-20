@@ -107,23 +107,22 @@ jobs:
 
     - name: 清理已有资产 (Windows)
       if: matrix.platform == 'windows-latest'
+      shell: pwsh
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo off
-        set TAG=app-v1.0.0
-        for /f "usebackq tokens=*" %%i in (`curl -s -H "Authorization: Bearer %GITHUB_TOKEN%" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases/tags/%TAG%`) do set JSON=%%i
-        
-        rem Windows shell json parsing is hard; skip if jq not available
-        where jq >nul 2>nul && (
-          echo %JSON% | jq -r '.assets[] | select(.name|test("windows")) | .id' > assets.txt
-          for /f %%A in (assets.txt) do (
-            echo Deleting asset id: %%A
-            curl -s -X DELETE -H "Authorization: Bearer %GITHUB_TOKEN%" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases/assets/%%A >nul
-          )
-        ) || (
-          echo jq not found; skip cleanup
-        )
+        $ErrorActionPreference = 'Stop'
+        $tag = 'app-v1.0.0'
+        $repo = '${{ github.repository }}'
+        $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json' }
+        $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
+        if ($null -ne $release -and $null -ne $release.id) {
+          foreach ($asset in $release.assets) {
+            if ($asset.name -match 'windows') {
+              Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/$repo/releases/assets/$($asset.id)"
+            }
+          }
+        }
 
     - name: 构建应用程序 (Windows)
       if: matrix.platform == 'windows-latest'
