@@ -386,7 +386,8 @@ pub fn run() {
             utils::create_dir,
             list_log_files,
             read_log_file,
-            cleanup_old_logs
+            cleanup_old_logs,
+            delete_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1198,6 +1199,20 @@ async fn cleanup_old_logs(app: tauri::AppHandle, keep_days: u32) -> Result<usize
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
     
     logger::cleanup_old_logs(app_data_dir, keep_days)
+}
+
+#[tauri::command]
+async fn delete_files(paths: Vec<String>) -> Result<usize, String> {
+    let mut count = 0usize;
+    for p in paths {
+        validate_path_safety(&p)?;
+        let path = PathBuf::from(&p);
+        if path.exists() {
+            std::fs::remove_file(&path).map_err(|e| format!("删除文件失败: {} ({:?})", e, path))?;
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 /// 通过资源目录解析工具路径（优先使用打包后的资源目录）
 fn resolve_tool_path(handle: &tauri::AppHandle, tool_name: &str) -> PathBuf {

@@ -325,6 +325,19 @@ export function useDownload(): UseDownloadReturn {
         }
 
         setLogs(prev => [...prev, { level: 'INFO' as LogEntry['level'], message: `处理完成，输出文件位于: ${finalOutputPath}`, timestamp: new Date().toISOString() }]);
+        try {
+          const toDelete: string[] = [];
+          toDelete.push(videoInputPath);
+          if (audioFile) {
+            const audioInputPath = await join(outputPath, audioFile.name);
+            toDelete.push(audioInputPath);
+            toDelete.push(mergedOutputPath);
+          }
+          await invoke<number>('delete_files', { paths: toDelete });
+          setLogs(prev => [...prev, { level: 'INFO' as LogEntry['level'], message: `已清理中间文件`, timestamp: new Date().toISOString() }].slice(-200));
+        } catch (cleanupErr: any) {
+          setLogs(prev => [...prev, { level: 'WARN' as LogEntry['level'], message: `清理中间文件失败: ${cleanupErr.message || cleanupErr}`, timestamp: new Date().toISOString() }].slice(-200));
+        }
         setPhase('completed');
 
     } catch (procError: any) {
