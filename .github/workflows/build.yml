@@ -46,15 +46,11 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       
     - name: 配置 Rust 缓存
-      uses: actions/cache@v4
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ matrix.cache-key }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ matrix.cache-key }}-cargo-
+        workspaces: |
+          src-tauri
+        cache-on-failure: true
         
     - name: 配置 Node.js 环境和缓存
       uses: actions/setup-node@v4
