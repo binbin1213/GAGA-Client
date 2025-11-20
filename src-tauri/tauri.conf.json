@@ -44,6 +44,14 @@
       "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "../bin/N_m3u8DL-RE",
+      "../bin/N_m3u8DL-RE.exe",
+      "../bin/ffmpeg",
+      "../bin/ffmpeg.exe",
+      "../bin/mp4decrypt",
+      "../bin/mp4decrypt.exe"
     ]
   },
   "plugins": {

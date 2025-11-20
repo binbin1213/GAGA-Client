@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use sha2::{Sha256, Digest};
 use tauri::{Manager, Emitter, menu::{MenuBuilder, MenuItemBuilder}, tray::{TrayIconBuilder, TrayIconEvent}};
+use tauri::path::BaseDirectory;
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -460,7 +461,7 @@ async fn exec_download_command(
   // 验证参数安全性
   validate_n_m3u8dl_args(&args)?;
   
-  let tool_path = get_tool_path_internal("N_m3u8DL-RE");
+  let tool_path = resolve_tool_path(&window.app_handle(), "N_m3u8DL-RE");
 
   // 检查工具是否存在
   if !tool_path.exists() {
@@ -624,6 +625,7 @@ async fn exec_download_command(
 /// 执行混流命令（ffmpeg）
 #[tauri::command]
 async fn exec_merge_command(
+  app: tauri::AppHandle,
   _command: String,
   args: Vec<String>,
 ) -> Result<String, String> {
@@ -632,8 +634,8 @@ async fn exec_merge_command(
     return Err("参数不能为空".to_string());
   }
   
-  // ffmpeg 通常需要系统安装，先尝试本地，再尝试系统
-  let tool_path = get_tool_path_internal("ffmpeg");
+  // ffmpeg 通常需要系统安装，先尝试资源目录，再尝试系统
+  let tool_path = resolve_tool_path(&app, "ffmpeg");
   let tool_path_str = if tool_path.exists() {
     tool_path.to_string_lossy().to_string()
   } else {
@@ -731,8 +733,8 @@ async fn exec_merge_command(
 }
 
 #[tauri::command]
-async fn exec_ffmpeg_command(args: Vec<String>) -> Result<String, String> {
-  exec_merge_command("ffmpeg".to_string(), args).await
+async fn exec_ffmpeg_command(app: tauri::AppHandle, args: Vec<String>) -> Result<String, String> {
+  exec_merge_command(app, "ffmpeg".to_string(), args).await
 }
 
 /// 检查工具是否可用
@@ -893,8 +895,8 @@ async fn burn_subtitle(
     timestamp: chrono::Utc::now().to_rfc3339(),
   });
   
-  // 获取 ffmpeg 路径
-  let ffmpeg_path = get_tool_path_internal("ffmpeg");
+  // 获取 ffmpeg 路径（资源目录优先）
+  let ffmpeg_path = resolve_tool_path(&window.app_handle(), "ffmpeg");
   
   // 构建 ffmpeg 命令
   // 字幕文件路径需要转义（Windows 路径中的反斜杠）
@@ -1058,7 +1060,7 @@ async fn burn_subtitle(
       });
 
       // 重新构建软件编码参数
-      let ffmpeg_path_fb = get_tool_path_internal("ffmpeg");
+      let ffmpeg_path_fb = resolve_tool_path(&window.app_handle(), "ffmpeg");
       let subtitle_filter_fb = if cfg!(target_os = "windows") {
         format!("subtitles='{}'", subtitle_path.replace("\\", "\\\\").replace(":", "\\:"))
       } else {
@@ -1196,4 +1198,31 @@ async fn cleanup_old_logs(app: tauri::AppHandle, keep_days: u32) -> Result<usize
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
     
     logger::cleanup_old_logs(app_data_dir, keep_days)
+}
+/// 通过资源目录解析工具路径（优先使用打包后的资源目录）
+fn resolve_tool_path(handle: &tauri::AppHandle, tool_name: &str) -> PathBuf {
+    // 根据操作系统添加可执行文件扩展名
+    #[cfg(windows)]
+    let tool_name_with_ext = if tool_name.ends_with(".exe") {
+        tool_name.to_string()
+    } else {
+        format!("{}.exe", tool_name)
+    };
+
+    #[cfg(not(windows))]
+    let tool_name_with_ext = tool_name.to_string();
+
+    // 资源目录中的路径，注意：使用 ../bin 以匹配 tauri.conf.json 的资源打包规则
+    let resource_path = handle
+        .path()
+        .resolve(&format!("../bin/{}", tool_name_with_ext), BaseDirectory::Resource);
+
+    if let Ok(p) = resource_path {
+        if validate_tool_path(&p) {
+            return p;
+        }
+    }
+
+    // 回退到编译期路径（开发模式）
+    get_tool_path_internal(tool_name)
 }
