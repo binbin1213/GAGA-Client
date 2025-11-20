@@ -115,12 +115,20 @@ jobs:
         $tag = 'app-v1.0.0'
         $repo = '${{ github.repository }}'
         $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json' }
-        $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
-        if ($null -ne $release -and $null -ne $release.id) {
-          foreach ($asset in $release.assets) {
-            if ($asset.name -match 'windows') {
-              Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/$repo/releases/assets/$($asset.id)"
+        try {
+          $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/tags/$tag"
+          if ($null -ne $release -and $null -ne $release.id) {
+            foreach ($asset in $release.assets) {
+              if ($asset.name -match 'windows') {
+                Invoke-RestMethod -Headers $headers -Method Delete -Uri "https://api.github.com/repos/$repo/releases/assets/$($asset.id)"
+              }
             }
+          }
+        } catch {
+          if ($_.Exception.Response -and $_.Exception.Response.StatusCode.Value__ -eq 404) {
+            Write-Host "Release $tag not found, skip cleanup."
+          } else {
+            throw
           }
         }
 
